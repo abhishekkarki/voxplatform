@@ -1,0 +1,6 @@
+apiVersion: v2
+name: faster-whisper
+description: faster-whisper-server for STT inference
+version: 0.1.0
+appVersion: "0.3.0"
+ 

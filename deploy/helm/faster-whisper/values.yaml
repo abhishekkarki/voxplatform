@@ -1,0 +1,32 @@
+replicaCount: 1
+ 
+image:
+  # Public image — no need to push to your Artifact Registry
+  repository: fedirz/faster-whisper-server
+  tag: "0.3.0-cpu"
+  pullPolicy: IfNotPresent
+ 
+service:
+  type: ClusterIP
+  port: 8000
+ 
+# Tuned for e2-standard-2 (2 vCPU, 8GB RAM) — leave room for system pods
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "1500m"
+    memory: "3Gi"
+ 
+env:
+  WHISPER__MODEL: "Systran/faster-whisper-small.en"
+  WHISPER__INFERENCE_DEVICE: "cpu"
+  WHISPER__COMPUTE_TYPE: "int8"
+ 
+health:
+  readinessPath: /health
+  livenessPath: /health
+  initialDelaySeconds: 60
+  periodSeconds: 10
+ 
