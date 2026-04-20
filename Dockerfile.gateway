@@ -1,0 +1,39 @@
+# Multi-stage build — standard Go pattern
+# Stage 1: Build the binary in a full Go image
+# Stage 2: Copy just the binary into a minimal image
+# Result: ~15MB image instead of ~1GB
+
+# --- Build stage ---
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+# Copy go.mod and go.sum first — Docker caches this layer
+# So if your code changes but dependencies don't, it skips downloading deps
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the rest of the source code
+COPY . .
+
+# Build a static binary with CGO disabled
+# CGO_ENABLED=0 means no C dependencies — the binary runs anywhere
+# -ldflags="-s -w" strips debug info to shrink the binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w" -o /gateway ./cmd/gateway
+
+# --- Runtime stage ---
+FROM alpine:3.19
+
+# Add CA certificates — needed for HTTPS calls to external services
+RUN apk --no-cache add ca-certificates
+
+# Don't run as root — security best practice
+RUN adduser -D -u 1000 appuser
+USER appuser
+
+COPY --from=builder /gateway /usr/local/bin/gateway
+
+EXPOSE 8080
+
+ENTRYPOINT ["gateway"]
