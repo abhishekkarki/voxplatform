@@ -1,0 +1,28 @@
+replicaCount: 1
+
+image:
+  repository: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+env:
+  PORT: "8080"
+  WHISPER_URL: "http://whisper.vox.svc.cluster.local:8000"
+
+health:
+  livenessPath: /healthz
+  readinessPath: /readyz
+  initialDelaySeconds: 5
+  periodSeconds: 10

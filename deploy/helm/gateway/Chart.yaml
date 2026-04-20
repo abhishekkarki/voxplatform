@@ -1,0 +1,5 @@
+apiVersion: v2
+name: gateway
+description: VoxPlatform API gateway
+version: 0.1.0
+appVersion: "0.1.0"
