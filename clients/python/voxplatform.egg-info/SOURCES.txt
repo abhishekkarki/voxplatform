@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+tests/test_clients.py
+voxplatform/__init__.py
+voxplatform/cli.py
+voxplatform/client.py
+voxplatform/models.py
+voxplatform.egg-info/PKG-INFO
+voxplatform.egg-info/SOURCES.txt
+voxplatform.egg-info/dependency_links.txt
+voxplatform.egg-info/entry_points.txt
+voxplatform.egg-info/requires.txt
+voxplatform.egg-info/top_level.txt
