@@ -1,0 +1,47 @@
+# Minimal VoiceModel — just specify the model, everything else defaults
+apiVersion: vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: whisper-small
+  namespace: vox
+spec:
+  model: Systran/faster-whisper-small.en
+---
+# Full VoiceModel — all fields specified
+apiVersion: vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: whisper-large-gpu
+  namespace: vox
+spec:
+  model: Systran/faster-whisper-large-v3
+  replicas: 2
+  device: gpu
+  quantization: float16
+  port: 8000
+  health:
+    path: /health
+    initialDelaySeconds: 120
+    periodSeconds: 15
+  metrics: true
+  resources:
+    requests:
+      cpu: "2"
+      memory: 8Gi
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "4"
+      memory: 16Gi
+      nvidia.com/gpu: "1"
+---
+# Scale to zero — useful for dev environments to save cost
+apiVersion: vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: whisper-dev
+  namespace: vox
+spec:
+  model: Systran/faster-whisper-tiny.en
+  replicas: 0
+  device: cpu
+  quantization: int8
