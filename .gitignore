@@ -1,0 +1,52 @@
+# Go
+gateway
+*.exe
+*.test
+*.out
+vendor/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform.lock.hcl
+crash.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+*.tar
+
+# Helm
+*.tgz
+charts/
+
+# Eval results (generated, not committed)
+eval/results/*.json
+
+# Secrets (never commit)
+*.pem
+*.key
+*.json.enc
+service-account*.json
+
+# OS
+Thumbs.db
