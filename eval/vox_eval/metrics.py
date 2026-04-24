@@ -19,6 +19,8 @@ Example:
 
 from __future__ import annotations
 
+import re
+import string
 from dataclasses import dataclass
 
 import jiwer
@@ -62,18 +64,30 @@ class AggregateMetrics:
         return self.corpus_wer < 1.0  # Sanity check only
 
 
-# Standard text normalization transforms for WER computation.
-# These handle common differences that aren't real errors:
-# - case differences ("The" vs "the")
-# - extra whitespace
-# - punctuation ("Hello," vs "Hello")
-_TRANSFORMS = jiwer.Compose([
-    jiwer.ExpandCommonEnglishContractions(),  # "don't" → "do not"
-    jiwer.RemoveMultipleSpaces(),
-    jiwer.Strip(),
-    jiwer.RemovePunctuation(),
-    jiwer.ToLowerCase(),
-])
+def _normalize(text: str) -> str:
+    """Normalize text before WER comparison.
+
+    Handles common differences that aren't real errors:
+    case, punctuation, contractions, extra whitespace.
+    """
+    text = text.lower()
+    text = text.replace("don't", "do not")
+    text = text.replace("can't", "cannot")
+    text = text.replace("won't", "will not")
+    text = text.replace("i'm", "i am")
+    text = text.replace("it's", "it is")
+    text = text.replace("he's", "he is")
+    text = text.replace("she's", "she is")
+    text = text.replace("we're", "we are")
+    text = text.replace("they're", "they are")
+    text = text.replace("i've", "i have")
+    text = text.replace("you've", "you have")
+    text = text.replace("we've", "we have")
+    text = text.replace("i'll", "i will")
+    text = text.replace("you'll", "you will")
+    text = text.translate(str.maketrans("", "", string.punctuation))
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def compute_wer(
@@ -82,7 +96,7 @@ def compute_wer(
 ) -> tuple[float, int, int, int]:
     """Compute WER between a reference and hypothesis.
 
-    Applies standard normalization (lowercase, remove punctuation,
+    Applies normalization (lowercase, remove punctuation,
     expand contractions) before comparison.
 
     Args:
@@ -91,28 +105,18 @@ def compute_wer(
 
     Returns:
         Tuple of (wer, substitutions, insertions, deletions).
-
-    Example:
-        wer, s, i, d = compute_wer("hello world", "hello word")
-        # wer=0.5, s=1, i=0, d=0
     """
-    # Handle edge cases
     if not ground_truth.strip():
-        # If reference is empty, any prediction is 100% wrong
         return (1.0 if prediction.strip() else 0.0), 0, 0, 0
 
     if not prediction.strip():
-        # If prediction is empty, every word in reference is a deletion
         word_count = len(ground_truth.split())
         return 1.0, 0, 0, word_count
 
-    # Compute WER with detailed breakdown
-    output = jiwer.process_words(
-        ground_truth,
-        prediction,
-        reference_transform=_TRANSFORMS,
-        hypothesis_transform=_TRANSFORMS,
-    )
+    ref = _normalize(ground_truth)
+    hyp = _normalize(prediction)
+
+    output = jiwer.process_words(ref, hyp)
 
     return (
         output.wer,
@@ -142,15 +146,13 @@ def aggregate(
     wers = [s.wer for s in sample_metrics]
     sorted_wers = sorted(wers)
 
-    # Corpus-level WER: treat all samples as one big transcript
-    all_references = [s.ground_truth for s in sample_metrics]
-    all_predictions = [s.prediction for s in sample_metrics]
+    # Corpus-level WER: normalize and treat all samples as one big transcript
+    all_refs_normalized = [_normalize(s.ground_truth) for s in sample_metrics]
+    all_preds_normalized = [_normalize(s.prediction) for s in sample_metrics]
 
     corpus_output = jiwer.process_words(
-        all_references,
-        all_predictions,
-        reference_transform=_TRANSFORMS,
-        hypothesis_transform=_TRANSFORMS,
+        all_refs_normalized,
+        all_preds_normalized,
     )
 
     # Median
