@@ -49,4 +49,4 @@ eval/results/*.json
 service-account*.json
 
 # OS
-Thumbs.db
+Thumbs.dboperator/bin/
