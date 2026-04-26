@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go-gateway:
+    name: Go Gateway
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./cmd/gateway/
+
+      - name: Test
+        run: go test ./internal/gateway/ -v -race -coverprofile=coverage-gateway.out
+
+      - name: Coverage
+        run: go tool cover -func=coverage-gateway.out | tail -1
+
+  go-operator:
+    name: Go Operator
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: operator
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: operator/go.mod
+
+      - name: Build
+        run: make build
+
+      - name: Generate manifests
+        run: make manifests
+
+      - name: Test
+        run: go test ./internal/controller/ -v -race -coverprofile=coverage-operator.out
+
+      - name: Coverage
+        run: go tool cover -func=coverage-operator.out | tail -1
+
+  python-sdk:
+    name: Python SDK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Test
+        run: pytest -v --tb=short
+
+  python-eval:
+    name: Python Eval Harness
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: eval
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install SDK (dependency)
+        run: pip install -e "../clients/python"
+
+      - name: Install eval
+        run: pip install -e ".[dev]"
+
+      - name: Test
+        run: pytest -v --tb=short
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint faster-whisper
+        run: helm lint deploy/helm/faster-whisper
+
+      - name: Lint gateway
+        run: helm lint deploy/helm/gateway
+
+      - name: Template faster-whisper
+        run: helm template whisper deploy/helm/faster-whisper -n vox
+
+      - name: Template gateway
+        run: helm template gateway deploy/helm/gateway -n vox
