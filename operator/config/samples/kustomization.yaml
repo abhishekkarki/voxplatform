@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- vox_v1alpha1_voicemodel.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

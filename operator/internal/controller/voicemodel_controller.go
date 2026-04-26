@@ -1,14 +1,18 @@
-// Package controller implements the VoiceModel reconciliation logic.
-//
-// The reconciler follows the Kubernetes operator pattern:
-// 1. Watch for VoiceModel create/update/delete events
-// 2. For each event, compare desired state (spec) with actual state (cluster)
-// 3. Take action to make actual state match desired state
-// 4. Update status to reflect what actually happened
-//
-// This is a level-triggered system, not edge-triggered:
-// the reconciler does't care WHY it was called (create vs update),
-// it just looks at the current state and fixes any drift.
+/*
+Copyright 2026.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package controller
 
@@ -30,42 +34,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	voxv1alpha1 "github.com/abhishek/voxplatform/operator/api/v1alpha1"
-	"github.com/influxdata/influxdb/client"
+	voxv1alpha1 "github.com/abhishekkarki/voxplatform/operator/api/v1alpha1"
 )
 
 const (
-	// finalizerName is used to ensure cleanup happens before deletion.
-	// When a VoiceModel is deleted, Kubernetes calls the reconciler
-	// one last time (with the finalizer) so we can clean up.
-	finalizerName = "vox.io/voicemodel-cleanup"
-
-	// Default images for each device type
+	finalizerName   = "vox.io/voicemodel-cleanup"
 	defaultCPUImage = "fedirz/faster-whisper-server:0.3.0-cpu"
-	defaultDPUImage = "fedirz/faster-whisper-server:0.3.0-cuda"
+	defaultGPUImage = "fedirz/faster-whisper-server:0.3.0-cuda"
 )
 
 // VoiceModelReconciler reconciles VoiceModel objects.
-// It creates and manages a Deployment + Service for each VoiceModel.
 type VoiceModelReconciler struct {
 	client.Client
-	Schema *runtime.Schema
+	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=vox.io,resources=voicemodels,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=vox.io,resources=voicemodels/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=vox.io,resources=voicemodels/finalizers,verbs=update
+// +kubebuilder:rbac:groups=vox.vox.io,resources=voicemodels,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=vox.vox.io,resources=voicemodels/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=vox.vox.io,resources=voicemodels/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is the main entry point — called every time a VoiceModel
 // changes or every time the requeue timer fires.
-//
-// The logic is deliberately simple:
-//  1. Fetch the VoiceModel
-//  2. If it's being deleted, clean up and remove the finalizer
-//  3. If it exists, ensure the Deployment and Service match the spec
-//  4. Update the status based on what's actually running
 func (r *VoiceModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -73,8 +64,6 @@ func (r *VoiceModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	var voiceModel voxv1alpha1.VoiceModel
 	if err := r.Get(ctx, req.NamespacedName, &voiceModel); err != nil {
 		if errors.IsNotFound(err) {
-			// Object was deleted before we could reconcile — nothing to do.
-			// This is normal in a concurrent system.
 			logger.Info("VoiceModel not found, likely deleted")
 			return ctrl.Result{}, nil
 		}
@@ -108,16 +97,10 @@ func (r *VoiceModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return r.updateStatus(ctx, &voiceModel)
 }
 
-// reconcileDelete handles VoiceModel deletion.
-// The finalizer ensures we get called before the object is removed,
-// giving us a chance to log or clean up external resources.
 func (r *VoiceModelReconciler) reconcileDelete(ctx context.Context, vm *voxv1alpha1.VoiceModel) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("cleaning up VoiceModel", "name", vm.Name)
 
-	// Remove the finalizer — this allows Kubernetes to actually delete the object.
-	// The Deployment and Service will be garbage collected automatically
-	// because we set OwnerReferences (see reconcileDeployment).
 	controllerutil.RemoveFinalizer(vm, finalizerName)
 	if err := r.Update(ctx, vm); err != nil {
 		return ctrl.Result{}, fmt.Errorf("removing finalizer: %w", err)
@@ -126,28 +109,20 @@ func (r *VoiceModelReconciler) reconcileDelete(ctx context.Context, vm *voxv1alp
 	return ctrl.Result{}, nil
 }
 
-// reconcileDeployment creates or updates the Deployment for a VoiceModel.
-// This is the "desired state → actual state" logic.
 func (r *VoiceModelReconciler) reconcileDeployment(ctx context.Context, vm *voxv1alpha1.VoiceModel) error {
 	logger := log.FromContext(ctx)
 	deployName := deploymentName(vm)
 
-	// Build the desired Deployment
 	desired := r.buildDeployment(vm)
 
-	// Set owner reference — when the VoiceModel is deleted,
-	// Kubernetes automatically deletes the Deployment too.
-	// This is garbage collection via ownership.
 	if err := controllerutil.SetControllerReference(vm, desired, r.Scheme); err != nil {
 		return fmt.Errorf("setting owner reference: %w", err)
 	}
 
-	// Check if the Deployment already exists
 	var existing appsv1.Deployment
 	err := r.Get(ctx, types.NamespacedName{Name: deployName, Namespace: vm.Namespace}, &existing)
 
 	if errors.IsNotFound(err) {
-		// Create it
 		logger.Info("creating Deployment", "name", deployName)
 		return r.Create(ctx, desired)
 	}
@@ -155,13 +130,11 @@ func (r *VoiceModelReconciler) reconcileDeployment(ctx context.Context, vm *voxv
 		return fmt.Errorf("fetching Deployment: %w", err)
 	}
 
-	// Update it — patch the spec to match desired state
 	existing.Spec = desired.Spec
 	logger.Info("updating Deployment", "name", deployName)
 	return r.Update(ctx, &existing)
 }
 
-// reconcileService creates or updates the Service for a VoiceModel.
 func (r *VoiceModelReconciler) reconcileService(ctx context.Context, vm *voxv1alpha1.VoiceModel) error {
 	logger := log.FromContext(ctx)
 	svcName := serviceName(vm)
@@ -183,14 +156,12 @@ func (r *VoiceModelReconciler) reconcileService(ctx context.Context, vm *voxv1al
 		return fmt.Errorf("fetching Service: %w", err)
 	}
 
-	// Update — preserve ClusterIP (immutable field)
 	desired.Spec.ClusterIP = existing.Spec.ClusterIP
 	existing.Spec = desired.Spec
 	logger.Info("updating Service", "name", svcName)
 	return r.Update(ctx, &existing)
 }
 
-// updateStatus checks the Deployment and updates the VoiceModel status.
 func (r *VoiceModelReconciler) updateStatus(ctx context.Context, vm *voxv1alpha1.VoiceModel) (ctrl.Result, error) {
 	deployName := deploymentName(vm)
 
@@ -199,12 +170,10 @@ func (r *VoiceModelReconciler) updateStatus(ctx context.Context, vm *voxv1alpha1
 		return r.setPhase(ctx, vm, voxv1alpha1.PhaseDeploying, "waiting for Deployment")
 	}
 
-	// Update ready replicas from the Deployment status
 	vm.Status.ReadyReplicas = deploy.Status.ReadyReplicas
 	vm.Status.Endpoint = fmt.Sprintf("%s.%s.svc.cluster.local:%d",
 		serviceName(vm), vm.Namespace, getPort(vm))
 
-	// Determine phase based on Deployment conditions
 	replicas := int32(1)
 	if vm.Spec.Replicas != nil {
 		replicas = *vm.Spec.Replicas
@@ -218,18 +187,15 @@ func (r *VoiceModelReconciler) updateStatus(ctx context.Context, vm *voxv1alpha1
 		return r.setPhase(ctx, vm, voxv1alpha1.PhaseDeploying,
 			fmt.Sprintf("%d/%d replicas ready", deploy.Status.ReadyReplicas, replicas))
 	default:
-		// Check for failure conditions
 		for _, cond := range deploy.Status.Conditions {
 			if cond.Type == appsv1.DeploymentReplicaFailure && cond.Status == corev1.ConditionTrue {
 				return r.setPhase(ctx, vm, voxv1alpha1.PhaseFailed, cond.Message)
 			}
 		}
-		// Still deploying — requeue after 10 seconds to check again
 		return r.setPhase(ctx, vm, voxv1alpha1.PhaseDeploying, "waiting for pods to be ready")
 	}
 }
 
-// setPhase updates the VoiceModel status and requeues if not ready.
 func (r *VoiceModelReconciler) setPhase(
 	ctx context.Context,
 	vm *voxv1alpha1.VoiceModel,
@@ -248,7 +214,6 @@ func (r *VoiceModelReconciler) setPhase(
 		return ctrl.Result{}, fmt.Errorf("updating status: %w", err)
 	}
 
-	// Requeue if not ready — check again in 10 seconds
 	if phase != voxv1alpha1.PhaseReady && phase != voxv1alpha1.PhaseFailed {
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
@@ -256,7 +221,6 @@ func (r *VoiceModelReconciler) setPhase(
 	return ctrl.Result{}, nil
 }
 
-// buildDeployment constructs the Deployment for a VoiceModel.
 func (r *VoiceModelReconciler) buildDeployment(vm *voxv1alpha1.VoiceModel) *appsv1.Deployment {
 	labels := labelsForVoiceModel(vm)
 	replicas := int32(1)
@@ -290,20 +254,17 @@ func (r *VoiceModelReconciler) buildDeployment(vm *voxv1alpha1.VoiceModel) *apps
 		}
 	}
 
-	// Default resources based on device type
 	resources := vm.Spec.Resources
 	if resources == nil {
 		resources = defaultResources(vm.Spec.Device)
 	}
 
-	// Build environment variables for the inference server
 	env := []corev1.EnvVar{
 		{Name: "WHISPER__MODEL", Value: vm.Spec.Model},
 		{Name: "WHISPER__INFERENCE_DEVICE", Value: vm.Spec.Device},
 		{Name: "WHISPER__COMPUTE_TYPE", Value: vm.Spec.Quantization},
 	}
 
-	// Build pod annotations for Prometheus scraping
 	metricsEnabled := vm.Spec.Metrics == nil || *vm.Spec.Metrics
 	annotations := map[string]string{}
 	if metricsEnabled {
@@ -371,7 +332,6 @@ func (r *VoiceModelReconciler) buildDeployment(vm *voxv1alpha1.VoiceModel) *apps
 	}
 }
 
-// buildService constructs the Service for a VoiceModel.
 func (r *VoiceModelReconciler) buildService(vm *voxv1alpha1.VoiceModel) *corev1.Service {
 	labels := labelsForVoiceModel(vm)
 	port := getPort(vm)
@@ -398,13 +358,11 @@ func (r *VoiceModelReconciler) buildService(vm *voxv1alpha1.VoiceModel) *corev1.
 }
 
 // SetupWithManager registers the controller with the manager.
-// It tells controller-runtime to watch VoiceModel resources
-// and also watch Deployments/Services that are owned by VoiceModels.
 func (r *VoiceModelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&voxv1alpha1.VoiceModel{}). // Watch VoiceModel CRDs
-		Owns(&appsv1.Deployment{}).     // Also watch owned Deployments
-		Owns(&corev1.Service{}).        // Also watch owned Services
+		For(&voxv1alpha1.VoiceModel{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
 

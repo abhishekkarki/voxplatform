@@ -1,0 +1,9 @@
+apiVersion: vox.vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  labels:
+    app.kubernetes.io/name: operator
+    app.kubernetes.io/managed-by: kustomize
+  name: voicemodel-sample
+spec:
+  # TODO(user): Add fields here
