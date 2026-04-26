@@ -49,18 +49,16 @@ jobs:
         run: make manifests
 
       - name: Setup envtest
-        run: |
-          go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.23
-          setup-envtest use 1.35.0 --bin-dir ./bin/k8s
+        run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.23
 
       - name: Test
         run: |
-          export KUBEBUILDER_ASSETS=$(setup-envtest use 1.35.0 --bin-dir ./bin/k8s -p path)
+          export KUBEBUILDER_ASSETS=$(setup-envtest use 1.35.0 -p path)
           go test ./internal/controller/ -v -race -coverprofile=coverage-operator.out
 
       - name: Coverage
         run: go tool cover -func=coverage-operator.out | tail -1
-        
+
   python-sdk:
     name: Python SDK
     runs-on: ubuntu-latest
