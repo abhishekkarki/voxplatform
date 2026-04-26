@@ -1,0 +1,15 @@
+.venv/
+.git/
+.terraform/
+*.tfstate
+__pycache__/
+*.egg-info/
+clients/
+eval/
+operator/
+infra/
+docs/
+deploy/
+.venv
+node_modules
+*.md
