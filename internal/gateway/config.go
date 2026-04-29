@@ -8,14 +8,16 @@ import "os"
 // just environment variables that Kubernetes sets via the Helm values.
 
 type Config struct {
-	Port       string // PORT - what port the gateway listens on
-	WhisperURL string // WHISPER_URL - where the whisper service lives
+	Port        string // PORT — what port the gateway listens on
+	WhisperURL  string // WHISPER_URL — where the whisper service lives
+	VADEndpoint string // VAD_ENDPOINT — where the VAD sidecar lives
 }
 
 func LoadConfig() Config {
 	return Config{
-		Port:       getEnv("PORT", "8080"),
-		WhisperURL: getEnv("WHISPER_URL", "http://whisper.vox.svc.cluster.local:8000"),
+		Port:        getEnv("PORT", "8080"),
+		WhisperURL:  getEnv("WHISPER_URL", "http://whisper.vox.svc.cluster.local:8000"),
+		VADEndpoint: getEnv("VAD_ENDPOINT", "http://localhost:8001"),
 	}
 }
 

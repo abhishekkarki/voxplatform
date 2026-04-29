@@ -21,24 +21,24 @@ func NewServer(cfg Config, logger *slog.Logger) *Server {
 }
 
 // Router sets up all routes and wraps them with middleware.
-// We use the standard library's http.ServeMux (improved in Go 1.22).
 func (s *Server) Router() http.Handler {
 	mux := http.NewServeMux()
 
-	// Health endpoints - Kubernetes probes hit these
+	// Health endpoints — Kubernetes probes
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /readyz", s.handleReady)
 
-	// Metrics endpoint - Prometheus scrapes this
+	// Metrics endpoint — Prometheus scrapes this
 	mux.HandleFunc("GET /metrics", s.handleMetrics)
 
-	// API routes
+	// Batch API routes
 	mux.HandleFunc("POST /v1/audio/transcriptions", s.handleTranscribe)
 	mux.HandleFunc("GET /v1/models", s.handleListModels)
 
-	// Middleware runs outside-in:
-	// request → requestID → logging → metrics → recovery → handler
-	// response ← requestID ← logging ← metrics ← recovery ← handler
+	// Streaming API — WebSocket endpoint
+	mux.HandleFunc("/v1/audio/stream", s.handleStream)
+
+	// Middleware chain: requestID → logging → metrics → recovery → handler
 	var handler http.Handler = mux
 	handler = s.recoveryMiddleware(handler)
 	handler = s.metricsMiddleware(handler)
