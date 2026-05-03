@@ -2,7 +2,7 @@ replicaCount: 1
 
 image:
   repository: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/gateway
-  tag: "0.1.0"
+  tag: "0.2.0"
   pullPolicy: IfNotPresent
 
 service:
@@ -20,9 +20,26 @@ resources:
 env:
   PORT: "8080"
   WHISPER_URL: "http://whisper.vox.svc.cluster.local:8000"
+  VAD_ENDPOINT: "http://localhost:8001"
 
 health:
   livenessPath: /healthz
   readinessPath: /readyz
   initialDelaySeconds: 5
   periodSeconds: 10
+
+# VAD sidecar configuration
+vad:
+  enabled: true
+  image:
+    repository: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/vad
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  port: 8001

@@ -20,6 +20,7 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       containers:
+        # Main gateway container
         - name: gateway
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -46,3 +47,28 @@ spec:
               port: http
             initialDelaySeconds: {{ .Values.health.initialDelaySeconds }}
             periodSeconds: {{ .Values.health.periodSeconds }}
+
+        # VAD sidecar — runs in the same pod, localhost communication
+        {{- if .Values.vad.enabled }}
+        - name: vad
+          image: "{{ .Values.vad.image.repository }}:{{ .Values.vad.image.tag }}"
+          imagePullPolicy: {{ .Values.vad.image.pullPolicy }}
+          ports:
+            - name: vad
+              containerPort: {{ .Values.vad.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.vad.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: vad
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: vad
+            initialDelaySeconds: 30
+            periodSeconds: 10
+        {{- end }}
