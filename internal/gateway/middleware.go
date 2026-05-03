@@ -61,7 +61,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// Hijack implements http.Hijacker — required for WebSocket upgrades.
+// Hijack implements http.Hijacker - required for WebSocket upgrades.
 // Without this, the WebSocket library can't take over the TCP connection.
 func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if hj, ok := rw.ResponseWriter.(http.Hijacker); ok {
