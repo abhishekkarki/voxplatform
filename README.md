@@ -1,5 +1,7 @@
 # voxplatform
 
+<img src ="images/voxplatform-logo.png" width="70%" height="35%">
+
 > A self-hosted, Kubernetes-native inference platform - operated via CRDs and deployed via GitOps - that serves open-source voice AI models with built-in eval, observability, and multi-model pipeline composition.
 
 ## What is this?
