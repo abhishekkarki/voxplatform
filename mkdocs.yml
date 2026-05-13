@@ -1,0 +1,143 @@
+site_name: VoxPlatform
+site_description: A Kubernetes-native voice transcription platform — streaming STT, VAD, and a model-serving operator on GKE.
+site_url: https://abhishekkarki.github.io/voxplatform/
+site_author: Abhishek Karki
+
+repo_url: https://github.com/abhishekkarki/voxplatform
+repo_name: abhishekkarki/voxplatform
+edit_uri: edit/main/docs/
+
+# Fail the build on broken links, missing nav entries, etc.
+strict: true
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - content.tabs.link
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      permalink_title: Anchor link to this section
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: [docs, .]
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+  - include-markdown
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [sdk]   # adjust to wherever your Python SDK package lives
+          options:
+            show_source: false
+            show_root_heading: true
+            show_signature_annotations: true
+            members_order: source
+            docstring_style: google
+            separate_signature: true
+            merge_init_into_class: true
+
+# Diataxis-shaped navigation. Section index pages explain what each section is for.
+nav:
+  - Home: index.md
+  - Tutorial:
+      - tutorial/index.md
+      - First transcription in 5 minutes: tutorial/first-transcription.md
+  - How-to guides:
+      - how-to/index.md
+      - Deploy a VoiceModel: how-to/deploy-voicemodel.md
+      - Run the eval harness: how-to/eval-harness.md
+      - Scale the cluster up and down: how-to/scale-cluster.md
+      - Use the Python SDK: how-to/python-sdk.md
+  - Reference:
+      - reference/index.md
+      - HTTP API: reference/http-api.md
+      - WebSocket API: reference/websocket-api.md
+      - VoiceModel CRD: reference/voicemodel-crd.md
+      - Python SDK: reference/python-sdk.md
+      - vox CLI: reference/cli.md
+  - Explanation:
+      - explanation/index.md
+      - Architecture overview: explanation/architecture.md
+      - Why a VAD sidecar: explanation/why-vad-sidecar.md
+      - Streaming design: explanation/streaming-design.md
+      - Operator design: explanation/operator-design.md
+      - Lessons learned: explanation/lessons-learned.md
+      - ADRs: explanation/adrs.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/abhishekkarki/voxplatform
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/in/abhishekkarkidev
+  generator: false   # remove "Made with Material for MkDocs" footer line if you prefer
+
+# ADR files in docs/adr/ are included by include-markdown but not listed as nav entries.
+# Listing them under not_in_nav silences "orphaned page" warnings under --strict.
+not_in_nav: |
+  /adr/*.md
+
