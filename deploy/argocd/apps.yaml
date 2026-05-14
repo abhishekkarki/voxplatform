@@ -1,0 +1,47 @@
+# ArgoCD Application for Whisper
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: whisper
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/abhishekkarki/voxplatform.git
+    targetRevision: main
+    path: deploy/helm/faster-whisper
+    helm:
+      releaseName: whisper
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vox
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# ArgoCD Application for Gateway (with VAD sidecar)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gateway
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/abhishekkarki/voxplatform.git
+    targetRevision: main
+    path: deploy/helm/gateway
+    helm:
+      releaseName: gateway
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vox
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

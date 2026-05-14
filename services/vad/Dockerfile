@@ -6,16 +6,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install CPU-only PyTorch (much smaller than CUDA version)
+# Install CPU-only PyTorch + torchaudio
 RUN pip install --no-cache-dir \
-    torch --index-url https://download.pytorch.org/whl/cpu
+    torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Install remaining dependencies
+# Install remaining dependencies (uses default PyPI)
 RUN pip install --no-cache-dir \
     fastapi==0.115.0 \
     uvicorn==0.30.0 \
     numpy>=1.26.0 \
-    torchaudio --index-url https://download.pytorch.org/whl/cpu \
     packaging \
     onnxruntime
 

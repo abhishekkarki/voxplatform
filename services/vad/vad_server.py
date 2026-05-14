@@ -42,7 +42,7 @@ SAMPLE_RATE = 16000
 # Silero VAD expects specific window sizes: 512 for 16kHz
 WINDOW_SIZE = 512
 # Speech probability threshold — above this = speech detected
-THRESHOLD = 0.5
+THRESHOLD = 0.3
 
 
 @app.on_event("startup")
