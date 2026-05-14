@@ -25,7 +25,7 @@
 
 ---
 
-VoxPlatform is an open-source reference architecture for running voice AI inference on Kubernetes. It sits between voice agent frameworks (LiveKit, Pipecat) and generic inference platforms (Baseten, Modal) — providing the infrastructure layer that manages model deployments, multi-model pipelines, quality regression testing, and observability specifically for voice workloads.
+VoxPlatform is an open-source reference architecture for running voice AI inference on Kubernetes. It sits between voice agent frameworks (LiveKit, Pipecat) and generic inference platforms (Baseten, Modal) - providing the infrastructure layer that manages model deployments, multi-model pipelines, quality regression testing, and observability specifically for voice workloads.
 
 ```yaml
 apiVersion: vox.vox.io/v1alpha1
@@ -46,16 +46,16 @@ Apply this YAML and the operator reconciles a Deployment, Service, and monitorin
 |---|---|
 | **Declarative model serving** | `VoiceModel` CRD → operator reconciles Deployment + Service + health probes |
 | **Multi-stage pipelines** | `InferencePipeline` CRD chains STT → diarization → summarization |
-| **Streaming transcription** | WebSocket endpoint with Silero VAD — only speech reaches the model |
+| **Streaming transcription** | WebSocket endpoint with Silero VAD - only speech reaches the model |
 | **Quality regression testing** | WER eval harness blocks deploys when accuracy drops |
-| **Observability** | Prometheus metrics + Grafana dashboards per model — latency, throughput, cost |
+| **Observability** | Prometheus metrics + Grafana dashboards per model - latency, throughput, cost |
 | **GitOps-ready** | Helm charts + ArgoCD manifests for fully declarative deploys |
 
 ## What it is not
 
-- A voice agent framework — use LiveKit or Pipecat *on top of* VoxPlatform
-- A model training platform — bring your own models
-- A SaaS product — this is a self-hosted reference architecture
+- A voice agent framework - use LiveKit or Pipecat *on top of* VoxPlatform
+- A model training platform - bring your own models
+- A SaaS product - this is a self-hosted reference architecture
 
 ## Architecture
 
@@ -64,22 +64,22 @@ Apply this YAML and the operator reconciles a Deployment, Service, and monitorin
 │                Client  (Python SDK / CLI / curl)                │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │ HTTP  ·  WebSocket
-┌───────────────────────────────▼─────────────────────────────────┐
+┌───────────────────────────────v─────────────────────────────────┐
 │                   Gateway  (Go · port 8080)                     │
 │  POST /v1/audio/transcriptions   batch STT                      │
 │  WS   /v1/audio/stream           streaming STT + VAD            │
-│  POST /v1/pipeline/run           STT → diarize → summarize      │
-│                  │                  │               │            │
-│           VAD sidecar          Whisper         Diarizer          │
-│           Silero :8001         :8000           :8002             │
-│                                            Summarizer :8003      │
-│  Event log → /tmp (dev)  ·  GCS bucket (production)             │
+│  POST /v1/pipeline/run           STT -> diarize -> summarize    │
+│                  │                  │               │           │
+│           VAD sidecar          Whisper         Diarizer         │
+│           Silero :8001         :8000           :8002            │
+│                                            Summarizer :8003     │
+│  Event log -> /tmp (dev)  ·  GCS bucket (production)            │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
-┌───────────────────────────────▼─────────────────────────────────┐
+┌───────────────────────────────v─────────────────────────────────┐
 │          Kubernetes Operator  (Go · Kubebuilder)                │
-│  VoiceModel CRD         →  Deployment + Service                 │
-│  InferencePipeline CRD  →  validates stage readiness            │
+│  VoiceModel CRD         ->  Deployment + Service                │
+│  InferencePipeline CRD  ->  validates stage readiness           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -157,34 +157,9 @@ curl ... -F stages=stt                         # transcription only
 curl ... -F stages=stt,diarize                 # no summarization
 ```
 
-## Project Structure
-
-```
-voxplatform/
-├── cmd/gateway/                  # Gateway binary entry point
-├── internal/gateway/             # Handlers, middleware, proxy, streaming, pipeline, event log
-├── operator/
-│   ├── api/v1alpha1/             # VoiceModel + InferencePipeline CRD types
-│   ├── internal/controller/      # Reconciliation loops
-│   └── config/                   # CRD manifests, RBAC, sample CRs
-├── services/
-│   ├── vad/                      # Silero VAD sidecar (Python / FastAPI)
-│   ├── diarizer/                 # pyannote-audio diarization service
-│   └── summarizer/               # llama-cpp-python + Qwen 3B summarization
-├── clients/python/               # VoxClient SDK + vox CLI
-├── eval/                         # WER evaluation harness + vox-eval CLI
-├── deploy/
-│   ├── helm/                     # Helm charts: gateway, whisper, diarizer, summarizer, monitoring
-│   └── argocd/                   # ArgoCD Application manifests
-├── infra/
-│   ├── modules/                  # Terraform modules: gke, network, registry, storage
-│   └── environments/dev/         # Dev environment tfvars + backend config
-└── docs/                         # MkDocs site: tutorials, how-tos, ADRs, reference
-```
-
 ## Components
 
-### Gateway — `internal/gateway/`
+### Gateway - `internal/gateway/`
 
 Go HTTP/WebSocket server with zero external routing dependencies.
 
@@ -198,13 +173,13 @@ Go HTTP/WebSocket server with zero external routing dependencies.
 go test ./internal/gateway/ -v -race
 ```
 
-### Operator — `operator/`
+### Operator - `operator/`
 
 Kubebuilder-based controller managing two CRDs:
 
-**`VoiceModel`** — declares a model server. The controller creates a Deployment and Service, tracks phase (`Pending → Deploying → Ready → Failed`), and cleans up on deletion via finalizers.
+**`VoiceModel`** - declares a model server. The controller creates a Deployment and Service, tracks phase (`Pending → Deploying → Ready → Failed`), and cleans up on deletion via finalizers.
 
-**`InferencePipeline`** — declares a chain of VoiceModels as pipeline stages. The controller validates each referenced VoiceModel is Ready and reports aggregate health. Watches VoiceModel changes for immediate re-evaluation.
+**`InferencePipeline`** - declares a chain of VoiceModels as pipeline stages. The controller validates each referenced VoiceModel is Ready and reports aggregate health. Watches VoiceModel changes for immediate re-evaluation.
 
 ```bash
 cd operator && make build && make test
@@ -213,7 +188,7 @@ kubectl apply -f operator/config/samples/voicemodels/whisper-small.yaml
 kubectl get voicemodels -n vox -w
 ```
 
-### Python SDK — `clients/python/`
+### Python SDK - `clients/python/`
 
 Sync and async client with `vox` CLI.
 
@@ -233,14 +208,14 @@ vox transcribe meeting.wav --json     # raw JSON output
 vox record --duration 10              # stream from microphone
 ```
 
-### Eval Harness — `eval/`
+### Eval Harness - `eval/`
 
 Word Error Rate testing against ground-truth datasets. Blocks deployment when accuracy regresses.
 
 ```bash
 pip install -e ./eval
 vox-eval run eval/datasets/test --threshold 0.25
-# Exit 0 = WER ≤ 25% ✓   Exit 1 = regression detected
+# Exit 0 = WER ≤ 25%    Exit 1 = regression detected
 ```
 
 ## Infrastructure
@@ -260,7 +235,7 @@ Terraform state lives in a dedicated permanent bucket (`voxplatform-tfstate`) se
 
 | Layer | Technology |
 |-------|-----------|
-| Cloud | GCP — GKE Standard, Artifact Registry, Cloud NAT, GCS |
+| Cloud | GCP - GKE Standard, Artifact Registry, Cloud NAT, GCS |
 | IaC | Terraform 1.5+ |
 | Gateway | Go 1.26, stdlib `net/http`, `slog`, `nhooyr.io/websocket` |
 | Operator | Go, Kubebuilder, `controller-runtime` |
@@ -288,14 +263,14 @@ Full documentation is available at **[abhishekkarki.github.io/voxplatform](https
 
 | # | Goal | Status |
 |---|------|--------|
-| 0 | GKE + Terraform + gateway + Grafana | ✅ Complete |
-| 1 | Streaming + VAD sidecar | ✅ Complete |
-| 2 | `VoiceModel` operator (CRD → Deployment) | ✅ Complete |
-| 3 | `InferencePipeline` CRD · diarizer · summarizer · event log | ✅ Complete |
-| 4 | `EvalRun` CRD + Argo Workflows + WER regression in CI | 🔜 Next |
+| 0 | GKE + Terraform + gateway + Grafana | Complete |
+| 1 | Streaming + VAD sidecar | Complete |
+| 2 | `VoiceModel` operator (CRD → Deployment) | Complete |
+| 3 | `InferencePipeline` CRD · diarizer · summarizer · event log | Complete |
+| 4 | `EvalRun` CRD + Argo Workflows + WER regression in CI | Next |
 | 5 | GPU node pool (T4 spot) · vLLM · whisper-large-v3 | Planned |
 | 6 | Argo Rollouts canary · cost tracking · ArgoCD · demo | Planned |
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0 - see [LICENSE](LICENSE).
