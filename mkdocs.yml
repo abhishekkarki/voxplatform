@@ -110,6 +110,7 @@ nav:
       - how-to/index.md
       - Deploy a VoiceModel: how-to/deploy-voicemodel.md
       - Run the inference pipeline: how-to/run-pipeline.md
+      - GKE end-to-end testing: how-to/gke-e2e-testing.md
       - Run the eval harness: how-to/eval-harness.md
       - Scale the cluster up and down: how-to/scale-cluster.md
       - Use the Python SDK: how-to/python-sdk.md

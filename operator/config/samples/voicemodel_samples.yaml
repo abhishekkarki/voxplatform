@@ -1,29 +1,80 @@
-# Minimal VoiceModel — just specify the model, everything else defaults
-apiVersion: vox.io/v1alpha1
+# whisper-small — primary STT model, CPU int8
+apiVersion: vox.vox.io/v1alpha1
 kind: VoiceModel
 metadata:
   name: whisper-small
   namespace: vox
 spec:
   model: Systran/faster-whisper-small.en
+  device: cpu
+  quantization: int8
+  replicas: 1
 ---
-# Full VoiceModel — all fields specified
-apiVersion: vox.io/v1alpha1
+# pyannote-diarizer — speaker diarization, CPU
+# Runs in fallback mode (single-speaker) without HF_TOKEN env var.
+apiVersion: vox.vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: pyannote-diarizer
+  namespace: vox
+spec:
+  model: pyannote/speaker-diarization-3.1
+  image: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/diarizer:0.1.0
+  port: 8002
+  device: cpu
+  replicas: 1
+  health:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+---
+# qwen-summarizer — Qwen 3B GGUF, CPU
+# Model (~2GB) downloads to PVC on first startup.
+apiVersion: vox.vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: qwen-summarizer
+  namespace: vox
+spec:
+  model: Qwen/Qwen2.5-3B-Instruct-GGUF
+  image: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/summarizer:0.1.0
+  port: 8003
+  device: cpu
+  replicas: 1
+  health:
+    path: /health
+    initialDelaySeconds: 120
+    periodSeconds: 15
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "3Gi"
+    limits:
+      cpu: "3000m"
+      memory: "5Gi"
+---
+# whisper-large-gpu — GPU variant (iteration 5)
+apiVersion: vox.vox.io/v1alpha1
 kind: VoiceModel
 metadata:
   name: whisper-large-gpu
   namespace: vox
 spec:
   model: Systran/faster-whisper-large-v3
-  replicas: 2
+  replicas: 1
   device: gpu
   quantization: float16
-  port: 8000
   health:
     path: /health
     initialDelaySeconds: 120
     periodSeconds: 15
-  metrics: true
   resources:
     requests:
       cpu: "2"
@@ -33,15 +84,3 @@ spec:
       cpu: "4"
       memory: 16Gi
       nvidia.com/gpu: "1"
----
-# Scale to zero — useful for dev environments to save cost
-apiVersion: vox.io/v1alpha1
-kind: VoiceModel
-metadata:
-  name: whisper-dev
-  namespace: vox
-spec:
-  model: Systran/faster-whisper-tiny.en
-  replicas: 0
-  device: cpu
-  quantization: int8

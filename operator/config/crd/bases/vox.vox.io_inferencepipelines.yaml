@@ -1,0 +1,150 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: inferencepipelines.vox.vox.io
+spec:
+  group: vox.vox.io
+  names:
+    kind: InferencePipeline
+    listKind: InferencePipelineList
+    plural: inferencepipelines
+    singular: inferencepipeline
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.message
+      name: Message
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          InferencePipeline is the Schema for the inferencepipelines API.
+          It declares an ordered chain of VoiceModel-backed inference stages
+          (STT → diarize → summarize) and tracks their collective readiness.
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: InferencePipelineSpec defines the desired state of an InferencePipeline.
+            properties:
+              stages:
+                description: Stages is the ordered list of inference steps.
+                items:
+                  description: PipelineStage maps one inference step to a VoiceModel.
+                  properties:
+                    enabled:
+                      default: true
+                      description: Enabled controls whether this stage runs at request time.
+                      type: boolean
+                    model:
+                      description: Model is the name of a VoiceModel resource in the same namespace.
+                      type: string
+                    name:
+                      description: Name identifies this stage type.
+                      enum:
+                      - stt
+                      - diarize
+                      - summarize
+                      type: string
+                  required:
+                  - model
+                  - name
+                  type: object
+                minItems: 1
+                type: array
+            required:
+            - stages
+            type: object
+          status:
+            description: InferencePipelineStatus defines the observed state of an InferencePipeline.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current state.
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    observedGeneration:
+                      format: int64
+                      type: integer
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              lastTransitionTime:
+                format: date-time
+                type: string
+              message:
+                description: Message provides human-readable status details.
+                type: string
+              phase:
+                description: Phase is the current lifecycle phase.
+                enum:
+                - Pending
+                - Validating
+                - Ready
+                - Degraded
+                - Failed
+                type: string
+              stages:
+                description: Stages shows the readiness of each stage's backing VoiceModel.
+                items:
+                  description: PipelineStageStatus reflects the readiness of one stage.
+                  properties:
+                    endpoint:
+                      description: Endpoint is the internal K8s service address.
+                      type: string
+                    message:
+                      description: Message explains why the stage is or is not ready.
+                      type: string
+                    modelRef:
+                      description: ModelRef is the VoiceModel name this stage points to.
+                      type: string
+                    name:
+                      description: Name of the pipeline stage.
+                      type: string
+                    ready:
+                      description: Ready is true when the referenced VoiceModel is in Ready phase.
+                      type: boolean
+                  required:
+                  - modelRef
+                  - name
+                  - ready
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
