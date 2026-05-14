@@ -1,0 +1,22 @@
+apiVersion: vox.vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: qwen-summarizer
+  namespace: vox
+spec:
+  model: Qwen/Qwen2.5-3B-Instruct-GGUF
+  image: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/summarizer:0.1.0
+  port: 8003
+  device: cpu
+  replicas: 1
+  health:
+    path: /health
+    initialDelaySeconds: 120
+    periodSeconds: 15
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "3Gi"
+    limits:
+      cpu: "3000m"
+      memory: "5Gi"

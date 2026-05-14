@@ -31,6 +31,7 @@ rules:
 - apiGroups:
   - vox.vox.io
   resources:
+  - inferencepipelines
   - voicemodels
   verbs:
   - create
@@ -43,12 +44,14 @@ rules:
 - apiGroups:
   - vox.vox.io
   resources:
+  - inferencepipelines/finalizers
   - voicemodels/finalizers
   verbs:
   - update
 - apiGroups:
   - vox.vox.io
   resources:
+  - inferencepipelines/status
   - voicemodels/status
   verbs:
   - get

@@ -127,7 +127,7 @@ kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f 
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
-helm install monitoring prometheus-community/kube-prometheus-stack \
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   -n monitoring \
   -f deploy/helm/monitoring/values.yaml \
   --wait --timeout 5m
@@ -181,7 +181,7 @@ kubectl get pods -n operator-system -w
 ## Phase 5 — Whisper Model Server (≈10 min first run)
 
 ```bash
-helm install whisper deploy/helm/faster-whisper \
+helm upgrade --install whisper deploy/helm/faster-whisper \
   -n vox --create-namespace \
   --wait --timeout 10m
 ```
@@ -226,7 +226,7 @@ kubectl get voicemodels -n vox -w
 Update the values with your registry before deploying:
 
 ```bash
-helm install gateway deploy/helm/gateway \
+helm upgrade --install gateway deploy/helm/gateway \
   -n vox \
   --set image.repository=$REGISTRY/gateway \
   --set vad.image.repository=$REGISTRY/vad \
@@ -292,14 +292,14 @@ kubectl apply -f operator/config/samples/voicemodel_samples.yaml \
 
 ```bash
 # Diarizer (runs in fallback mode without HF_TOKEN — still useful for testing)
-helm install diarizer deploy/helm/diarizer \
+helm upgrade --install diarizer deploy/helm/diarizer \
   -n vox \
   --set image.repository=$REGISTRY/diarizer \
   --set image.tag=0.1.0 \
   --wait --timeout 5m
 
 # Summarizer (downloads Qwen 3B ~2GB on first start — be patient)
-helm install summarizer deploy/helm/summarizer \
+helm upgrade --install summarizer deploy/helm/summarizer \
   -n vox \
   --set image.repository=$REGISTRY/summarizer \
   --set image.tag=0.1.0 \

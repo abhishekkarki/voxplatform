@@ -1,0 +1,13 @@
+apiVersion: vox.vox.io/v1alpha1
+kind: InferencePipeline
+metadata:
+  name: default
+  namespace: vox
+spec:
+  stages:
+    - name: stt
+      model: whisper-small
+    - name: diarize
+      model: pyannote-diarizer
+    - name: summarize
+      model: qwen-summarizer

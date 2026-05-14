@@ -41,7 +41,7 @@ type StreamConfig struct {
 func DefaultStreamConfig() StreamConfig {
 	return StreamConfig{
 		MaxBufferDuration: 30 * time.Second,
-		SilenceFlushDelay: 800 * time.Millisecond,
+		SilenceFlushDelay: 2 * time.Second,
 		SampleRate:        16000,
 		FrameSize:         640, // 20ms at 16kHz, 16-bit mono
 		VADEndpoint:       "http://localhost:8001",
@@ -116,9 +116,16 @@ func (b *audioBuffer) shouldFlush(silenceDelay time.Duration, maxDuration time.D
 		return false
 	}
 
-	// Force flush if buffer is too large (someone speaking non-stop)
-	bufferDuration := time.Duration(b.totalBytes/2/sampleRate) * time.Second
-	if bufferDuration >= maxDuration {
+	// Calculate buffer duration properly (avoid integer truncation)
+	bufferSecs := float64(b.totalBytes) / 2.0 / float64(sampleRate)
+
+	// Don't flush less than 1 second of audio
+	if bufferSecs < 1.0 {
+		return false
+	}
+
+	// Force flush if buffer is too large
+	if bufferSecs >= maxDuration.Seconds() {
 		return true
 	}
 
@@ -282,11 +289,12 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 				buffer.markSpeech()
 				buffer.addFrame(data)
 			} else {
-				buffer.markSilence()
-				// Still add a few silence frames for natural-sounding audio
-				if buffer.isSpeaking {
+				// Always add frames if we have speech in the buffer
+				// This keeps trailing audio for natural word endings
+				if buffer.totalBytes > 0 {
 					buffer.addFrame(data)
 				}
+				buffer.markSilence()
 			}
 		}
 	}

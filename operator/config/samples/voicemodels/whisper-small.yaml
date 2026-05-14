@@ -1,0 +1,10 @@
+apiVersion: vox.vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: whisper-small
+  namespace: vox
+spec:
+  model: Systran/faster-whisper-small.en
+  device: cpu
+  quantization: int8
+  replicas: 1
