@@ -6,7 +6,8 @@ If [Tutorial](../tutorial/index.md) and [How-to](../how-to/index.md) tell you ho
 
 ## Contents
 
-- [Architecture overview](architecture.md) — the components and how they fit together
+- [Architecture overview](architecture.md) — all components, how they fit together, end-to-end request flow
+- [Pipeline design](pipeline-design.md) — how STT → diarize → summarize is orchestrated, event log, graceful degradation
 - [Why a VAD sidecar](why-vad-sidecar.md) — and not in-process VAD, and not a separate service
 - [Streaming design](streaming-design.md) — why WebSocket, why 20 ms PCM frames, why partial-vs-final
 - [Operator design](operator-design.md) — why a CRD instead of Helm values, where the reconciler boundary is

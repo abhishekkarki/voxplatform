@@ -8,11 +8,11 @@ Format: [Michael Nygard's classic template](https://github.com/joelparkerhenders
 
 | # | Title | Status |
 |---|-------|--------|
-| 0001 | Use GKE rather than Cloud Run for the data plane | Accepted |
-| 0002 | VAD as a sidecar in the gateway pod | Accepted |
-| 0003 | WebSocket for the streaming protocol | Accepted |
-| 0004 | Single `VoiceModel` CRD rather than per-engine CRDs | Accepted |
-| 0005 | `jiwer` v4 as the WER source of truth | Accepted |
+| 001 | [Why CPU-first](../adr/001-why-cpu-first.md) | Accepted |
+| 002 | [Why faster-whisper-server](../adr/002-why-faster-whisper.md) | Accepted |
+| 003 | [Why GCP / GKE](../adr/003-why-gcp-gke.md) | Accepted |
+| 007 | [Append-only event log for inference requests](../adr/007-event-sourcing.md) | Accepted |
+| 008 | [Pipeline composition — InferencePipeline CRD + gateway orchestration](../adr/008-pipeline-composition.md) | Accepted |
 
 ## Read the ADRs
 

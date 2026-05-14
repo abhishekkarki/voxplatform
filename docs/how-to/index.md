@@ -7,6 +7,7 @@ These pages assume you've already worked through the [Tutorial](../tutorial/inde
 ## Available guides
 
 - [Deploy a VoiceModel](deploy-voicemodel.md) — apply a new model variant and watch the operator reconcile it
+- [Run the inference pipeline](run-pipeline.md) — run STT → diarize → summarize as a single request, locally or on GKE
 - [Run the eval harness](eval-harness.md) — compute WER against a held-out dataset, locally or against the live cluster
 - [Scale the cluster up and down](scale-cluster.md) — the scale-to-zero workflow for cost control
 - [Use the Python SDK](python-sdk.md) — call the gateway from your own code, batch or streaming

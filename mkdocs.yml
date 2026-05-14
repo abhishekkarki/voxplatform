@@ -1,5 +1,5 @@
 site_name: VoxPlatform
-site_description: A Kubernetes-native voice transcription platform — streaming STT, VAD, and a model-serving operator on GKE.
+site_description: A Kubernetes-native voice AI inference platform — STT, speaker diarization, summarization, and a model-serving operator on GKE.
 site_url: https://abhishekkarki.github.io/voxplatform/
 site_author: Abhishek Karki
 
@@ -109,19 +109,23 @@ nav:
   - How-to guides:
       - how-to/index.md
       - Deploy a VoiceModel: how-to/deploy-voicemodel.md
+      - Run the inference pipeline: how-to/run-pipeline.md
       - Run the eval harness: how-to/eval-harness.md
       - Scale the cluster up and down: how-to/scale-cluster.md
       - Use the Python SDK: how-to/python-sdk.md
   - Reference:
       - reference/index.md
       - HTTP API: reference/http-api.md
+      - Pipeline API: reference/pipeline-api.md
       - WebSocket API: reference/websocket-api.md
       - VoiceModel CRD: reference/voicemodel-crd.md
+      - InferencePipeline CRD: reference/inferencepipeline-crd.md
       - Python SDK: reference/python-sdk.md
       - vox CLI: reference/cli.md
   - Explanation:
       - explanation/index.md
       - Architecture overview: explanation/architecture.md
+      - Pipeline design: explanation/pipeline-design.md
       - Why a VAD sidecar: explanation/why-vad-sidecar.md
       - Streaming design: explanation/streaming-design.md
       - Operator design: explanation/operator-design.md

@@ -6,7 +6,7 @@ hide:
 
 # VoxPlatform
 
-**A Kubernetes-native voice transcription platform.** Streaming speech-to-text on GKE, with a VAD sidecar, a `VoiceModel` operator that declaratively manages inference workloads, and an evaluation harness that measures WER on every change.
+**A Kubernetes-native voice AI inference platform.** Streaming speech-to-text, speaker diarization, and summarization on GKE — operated via CRDs, deployed via GitOps, with built-in eval and observability.
 
 [Get started in 5 minutes :material-arrow-right:](tutorial/first-transcription.md){ .md-button .md-button--primary }
 [View the source on GitHub :material-github:](https://github.com/abhishekkarki/voxplatform){ .md-button }
@@ -17,18 +17,21 @@ hide:
 
 ```mermaid
 flowchart LR
-    A[Audio in<br/>mic or file] --> B[Go gateway<br/>HTTP + WebSocket]
-    B --> C[VAD sidecar<br/>Silero]
-    C --> D[faster-whisper<br/>VoiceModel CR]
-    D --> E[Text out<br/>partial + final]
+    A[Audio in<br/>mic or file] --> B[Go gateway<br/>:8080]
+    B --> C[VAD sidecar<br/>Silero :8001]
+    B --> D[Whisper STT<br/>VoiceModel :8000]
+    D --> E[Diarizer<br/>pyannote :8002]
+    E --> F[Summarizer<br/>Qwen 3B :8003]
+    F --> G[Transcript +<br/>speakers + summary]
 
     style A fill:#eef
-    style E fill:#efe
+    style G fill:#efe
 ```
 
-- **Batch and streaming** — `POST /transcribe` for files, `WS /stream` for low-latency live audio.
-- **Voice-activity detection** in front of the model so we only spend GPU/CPU cycles on speech.
-- **Declarative model serving** — apply a `VoiceModel` CR and the operator reconciles a Deployment + Service for that model variant.
+- **Batch and streaming** — `POST /v1/audio/transcriptions` for files, `WS /v1/audio/stream` for live audio with VAD.
+- **Multi-stage pipeline** — `POST /v1/pipeline/run` runs STT → speaker diarization → summarization as a single call.
+- **Declarative model serving** — apply a `VoiceModel` CR and the operator reconciles a Deployment + Service. `InferencePipeline` aggregates readiness across all stages.
+- **Append-only event log** — every pipeline request writes JSONL to GCS for replay and debugging.
 - **Continuous evaluation** — `jiwer`-based WER computed on a held-out dataset on every PR.
 
 ## How these docs are organised
