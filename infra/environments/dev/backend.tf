@@ -1,13 +1,8 @@
-# Start with local backend. Move to GCS when you have a second environment.
-#
-# To migrate later:
-# 1. Create a GCS bucket: gsutil mb gs://voxplatform-tfstate
-# 2. Uncomment the block below
-# 3. Run: terraform init -migrate-state
-#
-# terraform {
-#   backend "gcs" {
-#     bucket = "voxplatform-tfstate"
-#     prefix = "dev"
-#   }
-# }
+terraform {
+  backend "gcs" {
+    # Dedicated state bucket — created manually once, never managed by Terraform.
+    # Lives permanently regardless of terraform destroy.
+    bucket = "voxplatform-tfstate"
+    prefix = "dev"
+  }
+}
