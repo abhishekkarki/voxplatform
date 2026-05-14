@@ -1,4 +1,4 @@
-# Go
+# Go — compiled binaries
 gateway
 *.exe
 *.test
@@ -23,6 +23,8 @@ venv/
 *.tfplan
 .terraform.lock.hcl
 crash.log
+# tfvars contain project IDs and can contain secrets — keep off git
+infra/environments/dev/terraform.tfvars
 
 # IDE
 .vscode/
@@ -49,4 +51,14 @@ eval/results/*.json
 service-account*.json
 
 # OS
-Thumbs.dboperator/bin/
+Thumbs.db
+
+# Operator tooling binaries (downloaded by make, not source)
+operator/bin/
+
+# Claude Code working files
+.claude/
+
+# Test audio files (binary, use eval/datasets/ for versioned test data)
+test.wav
+*.wav

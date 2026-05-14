@@ -1,0 +1,126 @@
+services:
+
+  # ── Whisper model server ────────────────────────────────────────────────────
+  # Public image — no build needed. Downloads Systran/faster-whisper-small.en
+  # (~250MB) on first start; subsequent starts use the named volume cache.
+  # Slow to become healthy (60–90s on first run, ~10s after model is cached).
+  whisper:
+    image: fedirz/faster-whisper-server:0.3.0-cpu
+    ports:
+      - "8000:8000"
+    environment:
+      WHISPER__MODEL: Systran/faster-whisper-small.en
+      WHISPER__INFERENCE_DEVICE: cpu
+      WHISPER__COMPUTE_TYPE: int8
+      HF_HOME: /data/huggingface
+    volumes:
+      - whisper-model-cache:/data/huggingface
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 18          # 18 × 10s = 3 min total — covers first-run model download
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── VAD sidecar ─────────────────────────────────────────────────────────────
+  # In K8s this runs as a sidecar container in the gateway pod (localhost:8001).
+  # In Compose it's a separate service — gateway reaches it via http://vad:8001.
+  vad:
+    build:
+      context: services/vad
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── Diarizer ────────────────────────────────────────────────────────────────
+  # Speaker diarization via pyannote-audio.
+  # Without HF_TOKEN it runs in fallback (single-speaker) mode — still useful
+  # for pipeline testing. Set HF_TOKEN to enable full diarization.
+  diarizer:
+    build:
+      context: services/diarizer
+    ports:
+      - "8002:8002"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}          # pass from host env: export HF_TOKEN=hf_...
+      HF_HOME: /data/huggingface
+    volumes:
+      - diarizer-model-cache:/data/huggingface
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── Summarizer ──────────────────────────────────────────────────────────────
+  # Summarization via llama-cpp-python + Qwen 3B GGUF.
+  # Without the model it runs extractive fallback mode (first 3 sentences).
+  # Model (~2GB) downloads to the volume on first run.
+  summarizer:
+    build:
+      context: services/summarizer
+    ports:
+      - "8003:8003"
+    environment:
+      MODEL_REPO: Qwen/Qwen2.5-3B-Instruct-GGUF
+      MODEL_FILE: qwen2.5-3b-instruct-q4_k_m.gguf
+      MODEL_DIR: /data/models
+    volumes:
+      - summarizer-model-cache:/data/models
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s    # model load takes ~30–60s after download
+    restart: unless-stopped
+
+  # ── Gateway ─────────────────────────────────────────────────────────────────
+  # Built from Dockerfile.gateway (multi-stage, ~15MB result).
+  # Waits for whisper and vad before starting (core dependencies).
+  # Diarizer and summarizer are optional — if they're not ready the pipeline
+  # still runs STT-only.
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      WHISPER_URL: "http://whisper:8000"
+      VAD_ENDPOINT: "http://vad:8001"
+      DIARIZER_URL: "http://diarizer:8002"
+      SUMMARIZER_URL: "http://summarizer:8003"
+      EVENT_LOG_BACKEND: "local"
+      EVENT_LOG_DIR: "/tmp/vox-events"
+    volumes:
+      - event-logs:/tmp/vox-events   # mount to inspect events locally
+    depends_on:
+      whisper:
+        condition: service_healthy
+      vad:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  # Persists downloaded models across container restarts.
+  whisper-model-cache:
+  diarizer-model-cache:
+  summarizer-model-cache:
+  # Event log — mount to host to inspect JSONL files:
+  #   docker run --rm -v voxplatform_event-logs:/data alpine ls /data
+  event-logs:
