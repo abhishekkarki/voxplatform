@@ -1,0 +1,5 @@
+apiVersion: v2
+name: summarizer
+description: Summarization service (llama-cpp-python + Qwen 3B GGUF)
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,38 @@
+replicaCount: 1
+
+image:
+  repository: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/diarizer
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8002
+
+# Resources tuned for pyannote CPU inference (~1.5GB RAM for model + audio buffers)
+resources:
+  requests:
+    cpu: "500m"
+    memory: "2Gi"
+  limits:
+    cpu: "2000m"
+    memory: "4Gi"
+
+env:
+  # HF_TOKEN must be set as a K8s Secret and injected via envFrom in production.
+  # Without it the service runs in single-speaker fallback mode.
+  HF_TOKEN: ""
+  HF_HOME: /data/huggingface
+  MIN_SPEAKERS: "1"
+  MAX_SPEAKERS: "10"
+
+# Mount a PVC for the pyannote model cache (~1GB) so it survives pod restarts
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: ""   # use cluster default
+
+health:
+  path: /health
+  initialDelaySeconds: 30
+  periodSeconds: 10

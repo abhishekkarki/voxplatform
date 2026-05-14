@@ -7,16 +7,20 @@ import (
 
 // Server holds all dependencies the handlers need.
 type Server struct {
-	cfg    Config
-	logger *slog.Logger
-	proxy  *WhisperProxy
+	cfg      Config
+	logger   *slog.Logger
+	proxy    *WhisperProxy
+	pipeline *PipelineOrchestrator
 }
 
 func NewServer(cfg Config, logger *slog.Logger) *Server {
+	events := NewEventLogger(cfg)
+	proxy := NewWhisperProxy(cfg.WhisperURL)
 	return &Server{
-		cfg:    cfg,
-		logger: logger,
-		proxy:  NewWhisperProxy(cfg.WhisperURL),
+		cfg:      cfg,
+		logger:   logger,
+		proxy:    proxy,
+		pipeline: NewPipelineOrchestrator(cfg, proxy, events),
 	}
 }
 
@@ -37,6 +41,9 @@ func (s *Server) Router() http.Handler {
 
 	// Streaming API — WebSocket endpoint
 	mux.HandleFunc("/v1/audio/stream", s.handleStream)
+
+	// Pipeline API — multi-stage inference (STT → diarize → summarize)
+	mux.HandleFunc("POST /v1/pipeline/run", s.handlePipeline)
 
 	// Middleware chain: requestID → logging → metrics → recovery → handler
 	var handler http.Handler = mux

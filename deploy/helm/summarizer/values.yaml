@@ -1,0 +1,37 @@
+replicaCount: 1
+
+image:
+  repository: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/summarizer
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8003
+
+# Resources: Qwen 3B Q4 needs ~2.5GB RAM on CPU; inference is ~1–5 tok/s
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "3Gi"
+  limits:
+    cpu: "3000m"
+    memory: "5Gi"
+
+env:
+  MODEL_REPO: "Qwen/Qwen2.5-3B-Instruct-GGUF"
+  MODEL_FILE: "qwen2.5-3b-instruct-q4_k_m.gguf"
+  MODEL_DIR: "/data/models"
+  N_CTX: "2048"
+  MAX_TOKENS: "256"
+
+# Mount a PVC for the GGUF model (~2GB) so it survives pod restarts
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""
+
+health:
+  path: /health
+  initialDelaySeconds: 120   # model load takes ~60s after first download
+  periodSeconds: 15

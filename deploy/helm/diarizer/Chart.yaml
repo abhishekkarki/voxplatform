@@ -1,0 +1,5 @@
+apiVersion: v2
+name: diarizer
+description: Speaker diarization service (pyannote-audio 3.x)
+version: 0.1.0
+appVersion: "0.1.0"
