@@ -1,5 +1,5 @@
 # Go — compiled binaries
-gateway
+/gateway
 *.exe
 *.test
 *.out
