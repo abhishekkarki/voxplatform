@@ -1,21 +1,26 @@
 # GKE End-to-End Testing Guide
 
-This guide walks through deploying and validating every component of VoxPlatform on a live GKE cluster — from infrastructure provisioning through iteration 3 (InferencePipeline + event log).
+Deploys and validates every component on a live GKE cluster — iterations 0 through 3.
 
-**Expected total time:** ~90 minutes on a fresh cluster (most of it waiting for model downloads).
+**Expected time:** ~90 min on a fresh cluster (most of it waiting for model downloads).
+
+**Working directory for all commands:** `~/dev/voxplatform`
+
+**State:** Terraform state lives permanently in `gs://voxplatform-tfstate/dev/` — a manually-created bucket that survives `terraform destroy`.
 
 ---
 
 ## Prerequisites
 
 ```bash
-# Tools required
 gcloud --version      # Google Cloud SDK
 terraform --version   # >= 1.5
 kubectl version       # >= 1.28
 helm version          # >= 3.12
-docker --version      # for image builds
-pip install -e ./clients/python   # vox CLI
+docker --version
+
+# Install vox CLI
+pip install -e ./clients/python
 
 # Authenticate
 gcloud auth login
@@ -28,9 +33,11 @@ gcloud auth configure-docker europe-west3-docker.pkg.dev
 
 ### 1.1 Create terraform.tfvars
 
+This file is gitignored — recreate it every time you clone or change machines:
+
 ```bash
 cat > infra/environments/dev/terraform.tfvars <<EOF
-project_id       = "YOUR_GCP_PROJECT_ID"
+project_id       = "voxplatform"
 region           = "europe-west3"
 zone             = "europe-west3-a"
 env              = "dev"
@@ -41,80 +48,65 @@ cpu_disk_size_gb = 50
 EOF
 ```
 
-### 1.2 Provision GKE cluster
+### 1.2 Provision all infrastructure
 
 ```bash
 cd infra/environments/dev
-
-terraform init
-terraform apply -target=module.network -auto-approve
-terraform apply -target=module.gke -auto-approve
-terraform apply -target=module.registry -auto-approve
-terraform apply -target=module.storage -auto-approve
+terraform init          # connects to gs://voxplatform-tfstate/dev/
+terraform apply -auto-approve
+cd ~/dev/voxplatform
 ```
+
+Creates VPC, GKE cluster, Artifact Registry, and GCS artifacts bucket in one pass (~10 min).
 
 ### 1.3 Connect kubectl
 
 ```bash
 gcloud container clusters get-credentials vox-cluster-dev \
-  --zone europe-west3-a \
-  --project YOUR_GCP_PROJECT_ID
+  --zone europe-west3-a --project voxplatform
 
-kubectl get nodes   # expect 1-2 nodes, STATUS=Ready
+kubectl get nodes   # expect 1-2 nodes STATUS=Ready
 ```
 
-**Checkpoint ✓** At least one node in `Ready` state.
+**Checkpoint ✓** At least one node `Ready`.
 
 ---
 
 ## Phase 2 — Build and Push All Images (≈20 min)
 
-Set your registry prefix once:
+The Artifact Registry is recreated with the cluster — images must be pushed on every fresh cluster.
 
 ```bash
-export REGISTRY=europe-west3-docker.pkg.dev/YOUR_GCP_PROJECT_ID/vox-images-dev
+export REGISTRY=europe-west3-docker.pkg.dev/voxplatform/vox-images-dev
 ```
 
-Build all images for linux/amd64 (GKE nodes are x86):
-
 ```bash
-# Gateway (includes iteration 3 pipeline + event log)
-docker build --platform linux/amd64 \
-  -f Dockerfile.gateway \
-  -t $REGISTRY/gateway:0.3.0 .
-docker push $REGISTRY/gateway:0.3.0
+# Gateway
+docker build --platform linux/amd64 -f Dockerfile.gateway \
+  -t $REGISTRY/gateway:0.3.0 . && docker push $REGISTRY/gateway:0.3.0
 
 # VAD sidecar
-docker build --platform linux/amd64 \
-  -f services/vad/Dockerfile services/vad \
-  -t $REGISTRY/vad:0.1.0
-docker push $REGISTRY/vad:0.1.0
+docker build --platform linux/amd64 -f services/vad/Dockerfile services/vad \
+  -t $REGISTRY/vad:0.1.0 && docker push $REGISTRY/vad:0.1.0
 
-# Diarizer (pyannote-audio, large build — ~5 min)
-docker build --platform linux/amd64 \
-  -f services/diarizer/Dockerfile services/diarizer \
-  -t $REGISTRY/diarizer:0.1.0
-docker push $REGISTRY/diarizer:0.1.0
+# Diarizer (~5 min — large PyTorch build)
+docker build --platform linux/amd64 -f services/diarizer/Dockerfile services/diarizer \
+  -t $REGISTRY/diarizer:0.1.0 && docker push $REGISTRY/diarizer:0.1.0
 
-# Summarizer (llama-cpp-python C++ compile — ~10 min)
-docker build --platform linux/amd64 \
-  -f services/summarizer/Dockerfile services/summarizer \
-  -t $REGISTRY/summarizer:0.1.0
-docker push $REGISTRY/summarizer:0.1.0
+# Summarizer (~10 min — C++ llama.cpp compile)
+docker build --platform linux/amd64 -f services/summarizer/Dockerfile services/summarizer \
+  -t $REGISTRY/summarizer:0.1.0 && docker push $REGISTRY/summarizer:0.1.0
 
 # Operator
-cd operator
-docker build --platform linux/amd64 \
-  -t $REGISTRY/operator:0.1.0 .
-docker push $REGISTRY/operator:0.1.0
-cd ..
+docker build --platform linux/amd64 -f operator/Dockerfile operator \
+  -t $REGISTRY/operator:0.1.0 && docker push $REGISTRY/operator:0.1.0
 ```
 
-**Checkpoint ✓** All 5 images visible in Artifact Registry:
+**Checkpoint ✓**
 
 ```bash
-gcloud artifacts docker images list \
-  europe-west3-docker.pkg.dev/YOUR_GCP_PROJECT_ID/vox-images-dev
+gcloud artifacts docker images list $REGISTRY
+# expect 5 images: gateway, vad, diarizer, summarizer, operator
 ```
 
 ---
@@ -122,18 +114,16 @@ gcloud artifacts docker images list \
 ## Phase 3 — Monitoring (≈5 min)
 
 ```bash
-kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
-  -n monitoring \
+  -n monitoring --create-namespace \
   -f deploy/helm/monitoring/values.yaml \
   --wait --timeout 5m
 ```
 
-**Checkpoint ✓** Grafana and Prometheus pods running:
+**Checkpoint ✓**
 
 ```bash
 kubectl get pods -n monitoring | grep -E "grafana|prometheus"
@@ -147,14 +137,9 @@ kubectl get pods -n monitoring | grep -E "grafana|prometheus"
 
 ```bash
 kubectl apply -f operator/config/crd/bases/
-```
-
-Verify both CRDs are registered:
-
-```bash
 kubectl get crds | grep vox.vox.io
-# voicemodels.vox.vox.io          ...
-# inferencepipelines.vox.vox.io   ...
+# voicemodels.vox.vox.io
+# inferencepipelines.vox.vox.io
 ```
 
 ### 4.2 Deploy operator
@@ -162,19 +147,13 @@ kubectl get crds | grep vox.vox.io
 ```bash
 kubectl create namespace vox --dry-run=client -o yaml | kubectl apply -f -
 
-cd operator
-make deploy IMG=$REGISTRY/operator:0.1.0
-cd ..
-```
+cd operator && make deploy IMG=$REGISTRY/operator:0.1.0 && cd ..
 
-Watch it start:
-
-```bash
 kubectl get pods -n operator-system -w
-# controller-manager-xxx   Running
+# controller-manager-xxx   1/1   Running
 ```
 
-**Checkpoint ✓** Operator pod in `Running` state.
+**Checkpoint ✓** Operator pod `Running`.
 
 ---
 
@@ -182,39 +161,33 @@ kubectl get pods -n operator-system -w
 
 ```bash
 helm upgrade --install whisper deploy/helm/faster-whisper \
-  -n vox --create-namespace \
-  --wait --timeout 10m
+  -n vox --wait --timeout 10m
 ```
 
-The pod downloads `Systran/faster-whisper-small.en` (~250 MB) on first start.
+Downloads `Systran/faster-whisper-small.en` (~250 MB) on first start.
 
 ```bash
-kubectl get pods -n vox -w          # wait for Running
-kubectl logs -n vox -l app=whisper  # watch model download progress
+kubectl logs -n vox -l app=whisper -f   # watch download progress
 ```
 
-**Checkpoint ✓** Whisper pod `Running`, `/health` returns 200:
+**Checkpoint ✓**
 
 ```bash
 kubectl exec -n vox deploy/whisper -- \
   python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/health').read())"
+# b'OK'
 ```
 
 ---
 
-## Phase 6 — Apply VoiceModel CR for Whisper (≈2 min)
+## Phase 6 — VoiceModel CR for Whisper (≈2 min)
 
 ```bash
-kubectl apply -f operator/config/samples/voicemodel_samples.yaml \
-  --selector='metadata.name=whisper-small'
-```
+kubectl apply -f operator/config/samples/voicemodels/whisper-small.yaml
 
-Watch the operator reconcile:
-
-```bash
 kubectl get voicemodels -n vox -w
-# NAME            MODEL                              DEVICE  REPLICAS  READY  PHASE
-# whisper-small   Systran/faster-whisper-small.en    cpu     1         1      Ready
+# NAME            PHASE    READY
+# whisper-small   Ready    1
 ```
 
 **Checkpoint ✓** VoiceModel phase = `Ready`.
@@ -223,167 +196,153 @@ kubectl get voicemodels -n vox -w
 
 ## Phase 7 — Gateway (≈3 min)
 
-Update the values with your registry before deploying:
-
 ```bash
+# Kill any existing port-forward on 8080 before deploying
+lsof -ti :8080 | xargs kill -9 2>/dev/null; true
+
 helm upgrade --install gateway deploy/helm/gateway \
   -n vox \
   --set image.repository=$REGISTRY/gateway \
   --set vad.image.repository=$REGISTRY/vad \
   --wait --timeout 3m
+
+kubectl port-forward -n vox svc/gateway 8080:8080 &
 ```
 
-**Iteration 0 test — batch transcription:**
+**Iteration 0 — batch transcription:**
 
 ```bash
-kubectl port-forward -n vox svc/gateway 8080:8080 &
-
-vox health          # Gateway: ok
-vox ready           # Gateway: ready  (whisper reachable)
-vox transcribe test.wav
+vox health                    # Gateway: ok
+vox ready                     # Gateway: ready
+vox transcribe eval/datasets/test/test.wav
 # The quick brown fox jumps over the lazy dog.
 ```
 
-**Iteration 1 test — streaming:**
+**Iteration 1 — streaming:**
 
 ```bash
 vox record --duration 5
-# Speak something, get partial transcripts back in real-time
+# Speak — partial transcripts appear in real-time
 ```
 
 **Checkpoint ✓** Transcription works, streaming returns partials.
 
 ---
 
-## Phase 8 — Iteration 2 — Operator Validation (≈2 min)
-
-Verify the VoiceModel controller round-trip properly:
+## Phase 8 — Iteration 2 Operator Validation (≈5 min)
 
 ```bash
-# Edit replicas and watch operator respond
+# Scale up — operator should add a replica
 kubectl patch voicemodel whisper-small -n vox \
   --type=merge -p '{"spec":{"replicas":2}}'
-
 kubectl get voicemodel whisper-small -n vox -w
-# READY goes from 1 → 2, PHASE stays Ready
+# READY 1 → 2, PHASE stays Ready
 
-# Scale back down
+# Scale back
 kubectl patch voicemodel whisper-small -n vox \
   --type=merge -p '{"spec":{"replicas":1}}'
-```
 
-**Test deletion + finalizer cleanup:**
-
-```bash
+# Delete — operator removes Deployment + Service
 kubectl delete voicemodel whisper-small -n vox
-kubectl get deployments -n vox | grep whisper    # deployment gone
-kubectl get services -n vox | grep whisper       # service gone
+kubectl get deployments -n vox | grep whisper   # gone
+kubectl get services -n vox | grep whisper       # gone
 
-# Re-apply (needed for iteration 3)
-kubectl apply -f operator/config/samples/voicemodel_samples.yaml \
-  --selector='metadata.name=whisper-small'
+# Re-apply for iteration 3
+kubectl apply -f operator/config/samples/voicemodels/whisper-small.yaml
 ```
 
-**Checkpoint ✓** Operator creates, updates, and cleans up Deployments on CRD changes.
+**Checkpoint ✓** Operator creates, scales, and cleans up on CRD changes.
 
 ---
 
 ## Phase 9 — Diarizer and Summarizer (≈15 min first run)
 
 ```bash
-# Diarizer (runs in fallback mode without HF_TOKEN — still useful for testing)
+# Diarizer — runs in single-speaker fallback mode without HF_TOKEN
 helm upgrade --install diarizer deploy/helm/diarizer \
   -n vox \
   --set image.repository=$REGISTRY/diarizer \
   --set image.tag=0.1.0 \
   --wait --timeout 5m
 
-# Summarizer (downloads Qwen 3B ~2GB on first start — be patient)
+# Summarizer — Qwen 3B model downloads to PVC on first start (~2GB)
+# Run in background — model download takes time
 helm upgrade --install summarizer deploy/helm/summarizer \
   -n vox \
   --set image.repository=$REGISTRY/summarizer \
   --set image.tag=0.1.0 \
-  --timeout 15m &    # run in background — model download takes time
+  --timeout 15m &
 
-# Watch summarizer download progress
-kubectl logs -n vox -l app=summarizer -f
+kubectl logs -n vox -l app=summarizer -f   # watch model download
 ```
 
-**Optional: Enable full diarization with HuggingFace token**
+**Optional — enable full pyannote diarization:**
 
 ```bash
-# Accept terms at https://huggingface.co/pyannote/speaker-diarization-3.1 first
+# Accept terms first: https://huggingface.co/pyannote/speaker-diarization-3.1
 kubectl create secret generic diarizer-hf-token \
-  -n vox \
-  --from-literal=HF_TOKEN=hf_xxxxxxxxxxxxxxxx
+  -n vox --from-literal=HF_TOKEN=hf_xxxxxxxxxxxxxxxx
 
 helm upgrade diarizer deploy/helm/diarizer -n vox \
   --set image.repository=$REGISTRY/diarizer \
   --set image.tag=0.1.0 \
-  --set "env.HF_TOKEN=$(kubectl get secret -n vox diarizer-hf-token -o jsonpath='{.data.HF_TOKEN}' | base64 -d)"
+  --set "env.HF_TOKEN=$(kubectl get secret -n vox diarizer-hf-token \
+    -o jsonpath='{.data.HF_TOKEN}' | base64 -d)"
 ```
 
-**Checkpoint ✓** Both services healthy:
+**Checkpoint ✓**
 
 ```bash
 kubectl get pods -n vox
-# NAME               READY   STATUS    RESTARTS
-# diarizer-xxx       1/1     Running   0
-# summarizer-xxx     1/1     Running   0
+# diarizer-xxx    1/1   Running
+# summarizer-xxx  1/1   Running  (may take 15 min on first start)
 ```
 
 ---
 
-## Phase 10 — Apply VoiceModel CRs for Diarizer and Summarizer (≈2 min)
+## Phase 10 — VoiceModel CRs for Diarizer and Summarizer (≈2 min)
+
+Apply one file per model — do not use the combined `voicemodel_samples.yaml`:
 
 ```bash
-kubectl apply -f operator/config/samples/voicemodel_samples.yaml
-```
+kubectl apply -f operator/config/samples/voicemodels/pyannote-diarizer.yaml
+kubectl apply -f operator/config/samples/voicemodels/qwen-summarizer.yaml
 
-Watch all three VoiceModels go Ready:
-
-```bash
 kubectl get voicemodels -n vox -w
-# NAME               PHASE        READY
-# pyannote-diarizer  Ready        1
-# qwen-summarizer    Ready        1
-# whisper-small      Ready        1
+# pyannote-diarizer   Ready   1
+# qwen-summarizer     Ready   1   ← waits for model download to finish
+# whisper-small       Ready   1
 ```
-
-**Note:** `qwen-summarizer` will stay in `Deploying` until the model download finishes. This is expected.
 
 ---
 
-## Phase 11 — InferencePipeline CRD (≈2 min)
+## Phase 11 — InferencePipeline (≈2 min)
 
 ```bash
-kubectl apply -f operator/config/samples/inferencepipeline_sample.yaml
+kubectl apply -f operator/config/samples/voicemodels/inferencepipeline-default.yaml
 
 kubectl get inferencepipelines -n vox -w
-# NAME      PHASE      MESSAGE            AGE
-# default   Validating  0/3 stages ready  10s
-# default   Degraded    1/3 stages ready  20s
-# default   Ready       3/3 stages ready  45s
+# NAME      PHASE       MESSAGE
+# default   Validating  0/3 stages ready
+# default   Degraded    1/3 stages ready
+# default   Ready       3/3 stages ready
 ```
-
-Inspect stage detail:
 
 ```bash
 kubectl describe inferencepipeline default -n vox
-# Status:
-#   Phase:    Ready
-#   Message:  3/3 stages ready
-#   Stages:
-#     Name:      stt        Ready: true   Endpoint: vox-whisper-small.vox.svc...
-#     Name:      diarize    Ready: true   Endpoint: vox-pyannote-diarizer.vox.svc...
-#     Name:      summarize  Ready: true   Endpoint: vox-qwen-summarizer.vox.svc...
+# Stages:
+#   stt        Ready: true   Endpoint: vox-whisper-small.vox.svc...
+#   diarize    Ready: true   Endpoint: vox-pyannote-diarizer.vox.svc...
+#   summarize  Ready: true   Endpoint: vox-qwen-summarizer.vox.svc...
 ```
 
 **Checkpoint ✓** InferencePipeline phase = `Ready`.
 
 ---
 
-## Phase 12 — Upgrade Gateway with Pipeline Env Vars (≈1 min)
+## Phase 12 — Upgrade Gateway with Pipeline URLs (≈1 min)
+
+The `deploy/helm/gateway/values.yaml` already has `DIARIZER_URL`, `SUMMARIZER_URL`, and `EVENT_LOG_*` set. Just upgrade to pick them up:
 
 ```bash
 helm upgrade gateway deploy/helm/gateway \
@@ -396,55 +355,50 @@ helm upgrade gateway deploy/helm/gateway \
 
 ---
 
-## Phase 13 — End-to-End Pipeline Test (≈15 min)
+## Phase 13 — Pipeline Tests (≈15 min)
 
-### 13.1 Full pipeline
+### Full pipeline
 
 ```bash
 curl -X POST http://localhost:8080/v1/pipeline/run \
-  -F file=@test.wav | jq
+  -F file=@eval/datasets/test/test.wav | jq
 ```
 
-Expected response:
+Expected:
 
 ```json
 {
-  "request_id": "a5a0c665250590f7",
-  "processing_time_seconds": 12.4,
+  "transcript": "The quick brown fox jumps over the lazy dog.",
+  "segments": [{"start": 0.0, "end": 3.5, "speaker": "SPEAKER_00"}],
+  "summary": "A sentence about a fox jumping over a dog.",
   "stages": {
     "stt":       {"success": true, "duration_seconds": 2.1},
     "diarize":   {"success": true, "duration_seconds": 1.8},
     "summarize": {"success": true, "duration_seconds": 8.2}
-  },
-  "transcript": "The quick brown fox jumps over the lazy dog.",
-  "segments": [
-    {"start": 0.0, "end": 3.5, "speaker": "SPEAKER_00"}
-  ],
-  "summary": "A sentence about a fox jumping over a dog."
+  }
 }
 ```
 
-### 13.2 STT-only (verify stages param)
+### STT-only
 
 ```bash
 curl -X POST http://localhost:8080/v1/pipeline/run \
-  -F file=@test.wav -F stages=stt | jq '{transcript, stages}'
+  -F file=@eval/datasets/test/test.wav -F stages=stt | jq '{transcript, stages}'
 ```
 
-### 13.3 Graceful degradation — scale summarizer to 0
+### Graceful degradation
 
 ```bash
 kubectl scale deployment summarizer -n vox --replicas=0
 
 curl -X POST http://localhost:8080/v1/pipeline/run \
-  -F file=@test.wav | jq '.stages'
-# expect: stt.success=true, diarize.success=true, summarize.success=false
-# pipeline still returns transcript + segments
+  -F file=@eval/datasets/test/test.wav | jq '.stages'
+# summarize.success = false, stt and diarize still succeed
 
 kubectl scale deployment summarizer -n vox --replicas=1
 ```
 
-### 13.4 InferencePipeline reflects degradation
+### CRD tracks degradation
 
 ```bash
 kubectl scale deployment vox-qwen-summarizer -n vox --replicas=0
@@ -453,30 +407,27 @@ kubectl get inferencepipeline default -n vox
 
 kubectl scale deployment vox-qwen-summarizer -n vox --replicas=1
 kubectl get inferencepipeline default -n vox -w
-# PHASE: Ready      MESSAGE: 3/3 stages ready  ← updates within ~10s
+# PHASE: Ready      MESSAGE: 3/3 stages ready  ← within ~10s
 ```
 
-**Checkpoint ✓** Pipeline returns results, degradation is non-fatal, CRD phase tracks reality.
+**Checkpoint ✓** Pipeline returns results, degradation non-fatal, CRD phase tracks reality.
 
 ---
 
 ## Phase 14 — Event Log Validation (≈5 min)
 
-Note the `request_id` from your pipeline test above, then:
-
 ```bash
-# List event files written to GCS
-gsutil ls gs://vox-artifacts/events/$(date +%Y-%m-%d)/
+# Note request_id from a pipeline test above, then:
+gsutil ls gs://voxplatform-vox-artifacts-dev/events/$(date +%Y-%m-%d)/
 
-# Inspect one request's full event log
-gsutil cat gs://vox-artifacts/events/$(date +%Y-%m-%d)/<request_id>*.jsonl | jq .
+gsutil cat gs://voxplatform-vox-artifacts-dev/events/$(date +%Y-%m-%d)/<request_id>*.jsonl | jq .
 ```
 
-Expected output (one JSON object per line):
+Expected — one JSON object per line:
 
 ```json
 {"type":"pipeline.start","request_id":"a5a0...","timestamp":"..."}
-{"type":"stage.start","stage":"stt","request_id":"a5a0..."}
+{"type":"stage.start","stage":"stt"}
 {"type":"stage.complete","stage":"stt","data":{"duration_seconds":2.1}}
 {"type":"stage.start","stage":"diarize"}
 {"type":"stage.complete","stage":"diarize","data":{"num_segments":1}}
@@ -485,20 +436,16 @@ Expected output (one JSON object per line):
 {"type":"pipeline.complete","data":{"duration_seconds":12.4}}
 ```
 
-**Checkpoint ✓** Full event log in GCS with timing for every stage.
+**Checkpoint ✓** Full JSONL log in GCS with timing for every stage.
 
 ---
 
-## Phase 15 — Eval Harness Against Live Cluster (≈5 min)
+## Phase 15 — Eval Harness (≈5 min)
 
 ```bash
 pip install -e ./eval
-vox-eval run eval/datasets/test \
-  --url http://localhost:8080 \
-  --threshold 0.25
-
-# Exit 0 = WER ≤ 25%  ✓
-# Exit 1 = WER > 25%  — check the JSON report
+vox-eval run eval/datasets/test --url http://localhost:8080 --threshold 0.25
+# Exit 0 = WER ≤ 25% ✓
 ```
 
 ---
@@ -510,41 +457,66 @@ kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80 &
 open http://localhost:3000   # admin / prom-operator
 ```
 
-Navigate to Dashboards → VoxPlatform. Verify:
-- Request count increments when you run transcriptions
-- Latency histogram shows real values
-- In-flight gauge goes to 1 during a slow CPU transcription
+Check: request count increments, latency histogram has values, in-flight gauge spikes during transcription.
 
 ---
 
 ## Tear-down (saves ~$0.40/hr)
 
 ```bash
-# Remove all K8s resources
-helm uninstall gateway whisper diarizer summarizer monitoring -n vox 2>/dev/null
-kubectl delete namespace vox monitoring operator-system 2>/dev/null
+# Kill port-forwards
+lsof -ti :8080 | xargs kill -9 2>/dev/null; true
+lsof -ti :3000 | xargs kill -9 2>/dev/null; true
 
-# Destroy GKE cluster (keep registry and storage — cheap)
-cd infra/environments/dev
-terraform destroy -target=module.gke -auto-approve
-terraform destroy -target=module.network -auto-approve
+# Destroy all GCP resources
+cd ~/dev/voxplatform/infra/environments/dev
+terraform destroy -auto-approve
+```
+
+Terraform destroys all 7 resources. State is saved back to `gs://voxplatform-tfstate/dev/` which remains intact. Next `terraform apply` picks it up and starts fresh cleanly.
+
+**Do not destroy `voxplatform-tfstate` bucket** — it is permanent and not managed by Terraform.
+
+---
+
+## Quick-start checklist (returning session)
+
+```bash
+cd ~/dev/voxplatform
+# 1. Recreate tfvars (gitignored)
+cat > infra/environments/dev/terraform.tfvars <<EOF
+project_id = "voxplatform"
+region = "europe-west3"
+zone = "europe-west3-a"
+env = "dev"
+cpu_machine_type = "e2-standard-4"
+cpu_min_nodes = 1
+cpu_max_nodes = 2
+cpu_disk_size_gb = 50
+EOF
+# 2. Bring up infra
+cd infra/environments/dev && terraform init && terraform apply -auto-approve && cd ~/dev/voxplatform
+# 3. Rebuild images (registry is recreated each time)
+export REGISTRY=europe-west3-docker.pkg.dev/voxplatform/vox-images-dev
+# ... (Phase 2 commands)
+# 4. Connect kubectl and deploy (Phases 3–12)
 ```
 
 ---
 
-## Iteration 3 test checklist
+## Test checklist
 
 | Test | Command | Pass criteria |
 |------|---------|---------------|
-| Batch STT | `vox transcribe test.wav` | Transcript returned |
+| Batch STT | `vox transcribe eval/datasets/test/test.wav` | Transcript returned |
 | Streaming STT | `vox record --duration 5` | Partial transcripts in real-time |
 | VoiceModel CRD | `kubectl get voicemodels -n vox` | All 3 = Ready |
-| Operator scale | `kubectl patch voicemodel whisper-small --replicas=2` | Deployment scales, phase stays Ready |
-| Operator delete | `kubectl delete voicemodel whisper-small` | Deployment + Service removed |
+| Operator scale | `kubectl patch voicemodel whisper-small -n vox --type=merge -p '{"spec":{"replicas":2}}'` | Deployment scales |
+| Operator delete | `kubectl delete voicemodel whisper-small -n vox` | Deployment + Service removed |
 | InferencePipeline | `kubectl get inferencepipelines -n vox` | Phase = Ready, 3/3 stages |
-| Full pipeline | `POST /v1/pipeline/run` | transcript + segments + summary in response |
-| Stages param | `POST /v1/pipeline/run -F stages=stt` | Only transcript, no segments/summary |
-| Graceful degradation | Scale summarizer to 0, run pipeline | Pipeline returns, `stages.summarize.success=false` |
-| CRD reflects degradation | Check pipeline CRD after scaling down | Phase = Degraded, Message = 2/3 stages ready |
-| Event log | `gsutil cat gs://vox-artifacts/events/...` | Full JSONL log per request |
+| Full pipeline | `POST /v1/pipeline/run` | transcript + segments + summary |
+| Stages param | `POST /v1/pipeline/run -F stages=stt` | Only transcript returned |
+| Graceful degradation | Scale summarizer to 0, run pipeline | `stages.summarize.success=false`, pipeline continues |
+| CRD degradation | Check pipeline after scaling down | Phase = Degraded, 2/3 stages ready |
+| Event log | `gsutil cat gs://voxplatform-vox-artifacts-dev/events/...` | Full JSONL per request |
 | WER eval | `vox-eval run eval/datasets/test --threshold 0.25` | Exit code 0 |
