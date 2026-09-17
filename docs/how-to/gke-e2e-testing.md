@@ -461,6 +461,49 @@ Check: request count increments, latency histogram has values, in-flight gauge s
 
 ---
 
+## Phase 17 — GPU: whisper-large-v3 + vLLM Qwen (optional, ≈20 min, extra cost)
+
+**Optional.** Everything above works without this. Needs a T4 quota
+increase on a fresh project (default is 0) and costs more than the CPU-only
+setup even at spot pricing — see [ADR-010](../adr/010-gpu-support.md) and
+[Scale the cluster → GPU pool](scale-cluster.md#gpu-pool) before starting.
+
+```bash
+# 1. Turn on the GPU pool (separate from the CPU pool — doesn't disturb it)
+cd infra/environments/dev
+terraform apply -var gpu_enabled=true
+cd ~/dev/voxplatform
+
+# 2. Build and push the GPU summarizer image
+docker build --platform linux/amd64 -f services/summarizer/Dockerfile.gpu \
+  services/summarizer -t $REGISTRY/summarizer:0.1.0-gpu && \
+  docker push $REGISTRY/summarizer:0.1.0-gpu
+
+# 3. whisper-large-v3 on GPU (faster-whisper, not vLLM — see ADR-010 Decision 3)
+kubectl apply -f operator/config/samples/voicemodels/whisper-large-v3-gpu.yaml
+kubectl get voicemodels -n vox -w
+# whisper-large-v3-gpu   Ready   1
+
+# 4. Qwen 7B on GPU via vLLM
+helm upgrade --install summarizer deploy/helm/summarizer -n vox \
+  -f deploy/helm/summarizer/values-gpu.yaml \
+  --set image.repository=$REGISTRY/summarizer
+kubectl logs -n vox -l app=summarizer -f   # watch vLLM load the model
+
+# 5. GPU metrics
+helm install gpu-metrics deploy/helm/gpu-metrics -n vox
+kubectl get pods -n vox -l app=gpu-metrics -o wide   # should land on the GPU node
+```
+
+**Checkpoint ✓** `kubectl get voicemodel whisper-large-v3-gpu -n vox` phase =
+`Ready`; `curl -s .../summarizer:8003/health` reports `"mode": "vllm"`.
+
+This is the one phase in this guide not verified end-to-end against real
+hardware while writing it — no GPU available in that session. Report back
+via an issue if something here doesn't work as documented.
+
+---
+
 ## Tear-down (saves ~$0.40/hr)
 
 ```bash
@@ -473,7 +516,7 @@ cd ~/dev/voxplatform/infra/environments/dev
 terraform destroy -auto-approve
 ```
 
-Terraform destroys all 7 resources. State is saved back to `gs://voxplatform-tfstate/dev/` which remains intact. Next `terraform apply` picks it up and starts fresh cleanly.
+Terraform destroys all 7 resources (8 if Phase 17's GPU pool was turned on — it's destroyed too, no separate step needed). State is saved back to `gs://voxplatform-tfstate/dev/` which remains intact. Next `terraform apply` picks it up and starts fresh cleanly.
 
 **Do not destroy `voxplatform-tfstate` bucket** — it is permanent and not managed by Terraform.
 
@@ -520,3 +563,5 @@ export REGISTRY=europe-west3-docker.pkg.dev/voxplatform/vox-images-dev
 | CRD degradation | Check pipeline after scaling down | Phase = Degraded, 2/3 stages ready |
 | Event log | `gsutil cat gs://voxplatform-vox-artifacts-dev/events/...` | Full JSONL per request |
 | WER eval | `vox-eval run eval/datasets/test --threshold 0.25` | Exit code 0 |
+| GPU VoiceModel (optional) | `kubectl get voicemodel whisper-large-v3-gpu -n vox` | Phase = Ready, `nvidia.com/gpu` pod resource |
+| GPU metrics (optional) | `kubectl port-forward -n vox svc/gpu-metrics 9400:9400 && curl :9400/metrics` | `DCGM_FI_DEV_GPU_UTIL` present |

@@ -1,0 +1,25 @@
+# Eval harness image — bundles the Python SDK + vox-eval + the bundled sample
+# dataset so an EvalRun's Argo Workflow step can run `vox-eval` standalone,
+# with no repo checkout in the pod.
+#
+# Built from the repo root (not eval/) so it can reach the sibling SDK
+# package: `eval/setup.py`'s "vox_eval" imports voxplatform from
+# ../clients/python at runtime, and `eval`'s own pyproject depends on it too.
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY clients/python ./clients/python
+COPY eval ./eval
+
+RUN pip install --no-cache-dir -e ./clients/python -e ./eval
+
+# Don't run as root
+RUN useradd -m -u 1000 appuser
+USER appuser
+
+WORKDIR /app/eval
+
+ENTRYPOINT ["vox-eval"]
+CMD ["--help"]

@@ -32,7 +32,7 @@ VoxPlatform is structured around four layers: control plane, data plane, inferen
 │                                                               │
 │  VoiceModel CRD         → Deployment + Service               │
 │  InferencePipeline CRD  → validates VoiceModel readiness      │
-│  (EvalRun CRD)          → Argo Workflows (iteration 4)        │
+│  EvalRun CRD            → Argo Workflow (vox-eval, WER gate)  │
 └───────────────────────────────────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼───────────────────────────────┐

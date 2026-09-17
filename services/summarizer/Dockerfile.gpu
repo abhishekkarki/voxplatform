@@ -1,0 +1,39 @@
+# Summarization service — GPU variant. vLLM + Qwen (HF model, no GGUF) on
+# CUDA, for the GPU node pool added in iteration 5 (see ADR-010).
+#
+# Not built/pushed or run against real hardware anywhere in this repo's CI —
+# there's no GPU runner available. Build and smoke-test manually against a
+# real T4 node before relying on this in production:
+#   docker build --platform linux/amd64 -f services/summarizer/Dockerfile.gpu \
+#     services/summarizer -t $REGISTRY/summarizer:0.1.0-gpu
+#
+# The CPU variant (services/summarizer/Dockerfile, llama-cpp-python) is
+# unaffected by this file and stays the default.
+
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# vLLM pulls in the matching CUDA-enabled torch build itself — no separate
+# --index-url needed, unlike the CPU-only torch install in services/vad and
+# services/diarizer's Dockerfiles.
+RUN pip3 install --no-cache-dir \
+    vllm==0.6.3 \
+    fastapi==0.115.0 \
+    uvicorn==0.30.0 \
+    pydantic>=2.0
+
+COPY summarizer_server.py .
+
+RUN useradd -m -u 1000 appuser
+USER appuser
+
+ENV ENGINE=vllm
+
+EXPOSE 8003
+
+CMD ["uvicorn", "summarizer_server:app", "--host", "0.0.0.0", "--port", "8003"]

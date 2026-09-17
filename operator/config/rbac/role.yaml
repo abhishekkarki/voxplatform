@@ -29,8 +29,21 @@ rules:
   - update
   - watch
 - apiGroups:
+  - argoproj.io
+  resources:
+  - workflows
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - vox.vox.io
   resources:
+  - evalruns
   - inferencepipelines
   - voicemodels
   verbs:
@@ -44,6 +57,7 @@ rules:
 - apiGroups:
   - vox.vox.io
   resources:
+  - evalruns/finalizers
   - inferencepipelines/finalizers
   - voicemodels/finalizers
   verbs:
@@ -51,6 +65,7 @@ rules:
 - apiGroups:
   - vox.vox.io
   resources:
+  - evalruns/status
   - inferencepipelines/status
   - voicemodels/status
   verbs:

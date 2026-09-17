@@ -1,0 +1,30 @@
+apiVersion: vox.vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: qwen-summarizer-gpu
+  namespace: vox
+spec:
+  # Larger model than the CPU Qwen 3B — vLLM on a T4 can serve 7B comfortably.
+  model: Qwen/Qwen2.5-7B-Instruct
+  image: europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/summarizer:0.1.0-gpu
+  port: 8003
+  device: gpu
+  replicas: 1
+  health:
+    path: /health
+    initialDelaySeconds: 180 # vLLM model load is slower to first-ready than llama.cpp's GGUF load
+    periodSeconds: 15
+  resources:
+    requests:
+      cpu: "2000m"
+      memory: "12Gi"
+      nvidia.com/gpu: "1"
+    limits:
+      cpu: "4000m"
+      memory: "16Gi"
+      nvidia.com/gpu: "1"
+  # Requires the GPU node pool (gpu_enabled = true in Terraform) and the
+  # image built from services/summarizer/Dockerfile.gpu with ENGINE=vllm
+  # (see deploy/helm/summarizer/values-gpu.yaml for the Helm-deployed
+  # equivalent, and ADR-010 for why summarizer, not Whisper, is the vLLM
+  # workload in this iteration).

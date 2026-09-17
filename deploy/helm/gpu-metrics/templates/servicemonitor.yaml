@@ -1,0 +1,20 @@
+{{- if .Values.serviceMonitor.enabled }}
+# Picked up automatically — deploy/helm/monitoring sets
+# serviceMonitorSelectorNilUsesHelmValues: false, so kube-prometheus-stack
+# scrapes any ServiceMonitor in the cluster regardless of labels.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+{{- end }}

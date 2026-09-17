@@ -1,0 +1,5 @@
+apiVersion: v2
+name: gpu-metrics
+description: NVIDIA DCGM exporter — GPU utilization/memory/power metrics for the T4 node pool (iteration 5, see ADR-010)
+version: 0.1.0
+appVersion: "3.3.5"

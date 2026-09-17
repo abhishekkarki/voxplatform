@@ -43,7 +43,7 @@ The CRD and the runtime are different concerns. The CRD is about *what should ex
 The gateway already handles request ID propagation, structured logging, Prometheus metrics, and error formatting. Moving orchestration elsewhere would require duplicating all of that. The gateway is the right place to sequence HTTP calls between services.
 
 **Why sequential, not parallel:**  
-STT must complete before diarization can start (diarizer takes the same audio but the transcript is needed to assign text to speaker segments in the merge step). Summarization requires both. True DAG execution is deferred to Argo Workflows in iteration 4.
+STT must complete before diarization can start (diarizer takes the same audio but the transcript is needed to assign text to speaker segments in the merge step). Summarization requires both. True DAG execution for the *inference* pipeline itself remains future work — iteration 4 brings Argo Workflows into the platform, but scoped to eval orchestration (see [ADR-009](009-eval-orchestration.md)), not to replacing the gateway's sequential pipeline handler.
 
 **Why the pipeline stages are non-fatal except STT:**  
 If diarization fails (model not ready, pyannote not configured), the pipeline still returns a transcript and summary — just without speaker labels. If summarization fails, we still return transcript + segments. Only STT failure aborts the pipeline, because there's nothing to return without a transcript.
@@ -57,4 +57,4 @@ The individual VoiceModels already own their Deployments. The InferencePipeline 
 - The gateway's `POST /v1/pipeline/run` is a single endpoint for clients — they don't need to know about the three underlying services.
 - Adding a 4th stage (e.g., translation) means: add a new VoiceModel, update the InferencePipeline spec, update the gateway pipeline handler. No client changes.
 - The `stages` form field lets callers run a subset: `stages=stt` for transcription-only, `stages=stt,diarize` to skip summarization.
-- In iteration 4, `EvalRun` CRD will trigger Argo Workflows that call `POST /v1/pipeline/run` as part of WER regression testing.
+- Iteration 4's `EvalRun` CRD (see [ADR-009](009-eval-orchestration.md)) triggers Argo Workflows, but for WER regression they call `POST /v1/audio/transcriptions` (via the `vox-eval` harness), not `/v1/pipeline/run` — WER measures STT accuracy, which doesn't need diarize/summarize in the loop.

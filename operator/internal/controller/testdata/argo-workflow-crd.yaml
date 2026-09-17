@@ -1,0 +1,36 @@
+# A minimal, permissive stand-in for Argo Workflows' real `workflows.argoproj.io`
+# CRD (https://argoproj.github.io/argo-workflows/), used only so envtest's API
+# server has a schema to accept the EvalRun controller's unstructured
+# Create/Get calls against Workflow objects in tests. It is NOT the real Argo
+# schema — just enough shape (status subresource, permissive fields) for the
+# controller and its tests to exercise the create/read/status-patch cycle
+# against a real API server.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workflows.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: Workflow
+    listKind: WorkflowList
+    plural: workflows
+    singular: workflow
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+        properties:
+          spec:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true

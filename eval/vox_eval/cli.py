@@ -62,6 +62,14 @@ def main() -> None:
         default=120.0,
         help="Per-request timeout in seconds (default: 120)",
     )
+    run_parser.add_argument(
+        "--report-path",
+        help=(
+            "Write the JSON report to this exact path (no timestamp), in "
+            "addition to --output/--json. Used by the EvalRun Argo Workflow "
+            "step to expose the report as a Workflow output parameter."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -88,6 +96,9 @@ def cmd_run(args: argparse.Namespace) -> None:
     except RuntimeError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+    if args.report_path:
+        report.save_as(args.report_path)
 
     if args.json_output:
         print(json.dumps(report.to_dict(), indent=2))

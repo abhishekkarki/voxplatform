@@ -121,6 +121,7 @@ nav:
       - WebSocket API: reference/websocket-api.md
       - VoiceModel CRD: reference/voicemodel-crd.md
       - InferencePipeline CRD: reference/inferencepipeline-crd.md
+      - EvalRun CRD: reference/evalrun-crd.md
       - Python SDK: reference/python-sdk.md
       - vox CLI: reference/cli.md
   - Explanation:

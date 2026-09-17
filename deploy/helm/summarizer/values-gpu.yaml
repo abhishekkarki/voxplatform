@@ -1,0 +1,42 @@
+# GPU override for the summarizer chart — iteration 5 (see ADR-010).
+# Usage:
+#   helm upgrade --install summarizer deploy/helm/summarizer \
+#     -n vox -f deploy/helm/summarizer/values-gpu.yaml \
+#     --set image.repository=$REGISTRY/summarizer
+#
+# No template changes needed for this — deployment.yaml already ranges over
+# .Values.env generically and toYamls .Values.resources as-is, so setting
+# nvidia.com/gpu here is all scheduling needs (same reasoning as the
+# VoiceModel CRD path — see ADR-010's "no CRD/controller changes" decision).
+# Requires the GPU node pool (gpu_enabled = true in Terraform).
+
+image:
+  tag: "0.1.0-gpu"
+
+# vLLM loads Qwen 7B straight from HuggingFace — no GGUF conversion, no PVC
+# needed the way the CPU chart needs one for the GGUF file. Model weights
+# are cached in the image layer / HF cache inside the container instead.
+persistence:
+  enabled: false
+
+resources:
+  requests:
+    cpu: "2000m"
+    memory: "12Gi"
+    nvidia.com/gpu: "1"
+  limits:
+    cpu: "4000m"
+    memory: "16Gi"
+    nvidia.com/gpu: "1"
+
+env:
+  ENGINE: "vllm"
+  MODEL_REPO: "Qwen/Qwen2.5-7B-Instruct"
+  N_CTX: "4096"
+  MAX_TOKENS: "256"
+  GPU_MEMORY_UTILIZATION: "0.85"
+
+health:
+  path: /health
+  initialDelaySeconds: 180 # vLLM model load is slower to first-ready than llama.cpp's GGUF load
+  periodSeconds: 15

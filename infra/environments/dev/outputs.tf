@@ -23,3 +23,8 @@ output "kubeconfig_command" {
   description = "Run this to configure kubectl"
   value       = "gcloud container clusters get-credentials ${module.gke.cluster_name} --zone ${var.zone} --project ${var.project_id}"
 }
+
+output "gpu_pool_name" {
+  description = "GPU node pool name, empty string when gpu_enabled = false"
+  value       = module.gke.gpu_pool_name
+}

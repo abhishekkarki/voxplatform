@@ -1,0 +1,48 @@
+# DCGM exporter — one pod per GPU node, scrapeable by Prometheus.
+# Only install this once the GPU node pool exists (gpu_enabled = true in
+# Terraform) — the DaemonSet's nodeSelector means it simply won't schedule
+# anywhere until then, so installing it early is harmless, just idle.
+#
+# Not verified against a real GPU node in this repo — see ADR-010.
+
+image:
+  repository: nvcr.io/nvidia/k8s/dcgm-exporter
+  tag: "3.3.5-3.4.1-ubuntu22.04"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 9400
+
+# Must match the node pool's node_config.labels / GKE's own accelerator
+# label — see infra/modules/gke/main.tf and gpu_accelerator_type.
+nodeSelector:
+  cloud.google.com/gke-accelerator: nvidia-tesla-t4
+
+# The exporter does NOT request nvidia.com/gpu itself — on a single-GPU T4
+# node, doing so would consume the node's only allocatable GPU and starve
+# the actual inference workload. It needs an explicit toleration instead of
+# relying on GKE's ExtendedResourceToleration admission controller (which
+# only auto-tolerates pods that DO request the matching extended resource).
+# See ADR-010.
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Equal"
+    value: "present"
+    effect: "NoSchedule"
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "250m"
+    memory: "256Mi"
+
+# GKE's managed GPU driver install path (gpu_driver_installation_config in
+# Terraform) — dcgm-exporter reads driver libraries from here to talk to
+# the GPU. Mounted read-only.
+driverInstallDir: /home/kubernetes/bin/nvidia
+
+serviceMonitor:
+  enabled: true
+  interval: 30s

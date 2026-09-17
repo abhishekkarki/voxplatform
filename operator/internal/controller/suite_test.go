@@ -67,7 +67,12 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "config", "crd", "bases"),
+			// Minimal stand-in for the real Argo Workflows CRD — see
+			// testdata/argo-workflow-crd.yaml for why this is needed.
+			filepath.Join("testdata"),
+		},
 		ErrorIfCRDPathMissing: true,
 	}
 
