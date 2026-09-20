@@ -62,3 +62,8 @@ operator/bin/
 # Test audio files (binary, use eval/datasets/ for versioned test data)
 test.wav
 *.wav
+# ...except the versioned fixtures the comment above refers to — this
+# negation was missing, which is why eval/datasets/sample never actually
+# had its audio committed (caught by the wer-regression CI job failing
+# with "Audio files not found").
+!eval/datasets/**/*.wav
