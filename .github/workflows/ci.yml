@@ -100,6 +100,32 @@ jobs:
       - name: Test
         run: pytest -v --tb=short
 
+  wer-regression:
+    name: WER Regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start whisper + vad + gateway
+        run: docker compose up --build -d whisper vad gateway
+
+      - name: Wait for gateway readiness
+        run: timeout 180 bash -c 'until curl -sf http://localhost:8080/readyz; do sleep 5; done'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install SDK + eval harness
+        run: pip install -e clients/python -e "eval[dev]"
+
+      - name: Run WER regression check
+        run: vox-eval run eval/datasets/sample --url http://localhost:8080 --threshold 0.25
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: docker compose logs
+
   helm-lint:
     name: Helm Lint
     runs-on: ubuntu-latest
@@ -115,8 +141,23 @@ jobs:
       - name: Lint gateway
         run: helm lint deploy/helm/gateway
 
+      - name: Lint summarizer
+        run: helm lint deploy/helm/summarizer
+
+      - name: Lint gpu-metrics
+        run: helm lint deploy/helm/gpu-metrics
+
       - name: Template faster-whisper
         run: helm template whisper deploy/helm/faster-whisper -n vox
 
       - name: Template gateway
         run: helm template gateway deploy/helm/gateway -n vox
+
+      - name: Template summarizer (CPU default)
+        run: helm template summarizer deploy/helm/summarizer -n vox
+
+      - name: Template summarizer (GPU override, iteration 5)
+        run: helm template summarizer deploy/helm/summarizer -f deploy/helm/summarizer/values-gpu.yaml -n vox
+
+      - name: Template gpu-metrics
+        run: helm template gpu-metrics deploy/helm/gpu-metrics -n vox

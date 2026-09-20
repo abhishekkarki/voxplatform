@@ -47,7 +47,7 @@ Apply this YAML and the operator reconciles a Deployment, Service, and monitorin
 | **Declarative model serving** | `VoiceModel` CRD → operator reconciles Deployment + Service + health probes |
 | **Multi-stage pipelines** | `InferencePipeline` CRD chains STT → diarization → summarization |
 | **Streaming transcription** | WebSocket endpoint with Silero VAD - only speech reaches the model |
-| **Quality regression testing** | WER eval harness blocks deploys when accuracy drops |
+| **Quality regression testing** | WER eval harness (`EvalRun` CRD → Argo Workflow, and a CI gate) blocks deploys when accuracy drops |
 | **Observability** | Prometheus metrics + Grafana dashboards per model - latency, throughput, cost |
 | **GitOps-ready** | Helm charts + ArgoCD manifests for fully declarative deploys |
 
@@ -80,6 +80,7 @@ Apply this YAML and the operator reconciles a Deployment, Service, and monitorin
 │          Kubernetes Operator  (Go · Kubebuilder)                │
 │  VoiceModel CRD         ->  Deployment + Service                │
 │  InferencePipeline CRD  ->  validates stage readiness           │
+│  EvalRun CRD            ->  Argo Workflow (vox-eval, WER gate)  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -175,11 +176,13 @@ go test ./internal/gateway/ -v -race
 
 ### Operator - `operator/`
 
-Kubebuilder-based controller managing two CRDs:
+Kubebuilder-based controller managing three CRDs:
 
 **`VoiceModel`** - declares a model server. The controller creates a Deployment and Service, tracks phase (`Pending → Deploying → Ready → Failed`), and cleans up on deletion via finalizers.
 
 **`InferencePipeline`** - declares a chain of VoiceModels as pipeline stages. The controller validates each referenced VoiceModel is Ready and reports aggregate health. Watches VoiceModel changes for immediate re-evaluation.
+
+**`EvalRun`** - declares a one-shot WER regression check. The controller submits a single Argo Workflow running the `vox-eval` harness and mirrors its pass/fail back into status. See [ADR-009](docs/adr/009-eval-orchestration.md).
 
 ```bash
 cd operator && make build && make test
@@ -225,6 +228,7 @@ Terraform modules provision everything on GCP. A 2-hour dev session costs ~$0.40
 | Module | Resources | Est. cost |
 |--------|-----------|-----------|
 | `gke` | GKE Standard cluster, CPU node pool (e2-standard-4) | ~$0.17/hr |
+| `gke` (GPU pool) | T4 spot, `n1-standard-4`, 0–1 nodes, **off by default** (`gpu_enabled=false`) | see [current pricing](https://cloud.google.com/compute/gpus-pricing) |
 | `network` | VPC, subnet, Cloud Router, Cloud NAT | ~$0.05/hr |
 | `registry` | Artifact Registry | ~$0.10/GB/month |
 | `storage` | GCS bucket (eval datasets, event logs) | ~$0.02/GB/month |
@@ -239,10 +243,10 @@ Terraform state lives in a dedicated permanent bucket (`voxplatform-tfstate`) se
 | IaC | Terraform 1.5+ |
 | Gateway | Go 1.26, stdlib `net/http`, `slog`, `nhooyr.io/websocket` |
 | Operator | Go, Kubebuilder, `controller-runtime` |
-| STT | `fedirz/faster-whisper-server` (CTranslate2, int8, CPU) |
+| STT | `fedirz/faster-whisper-server` (CTranslate2, int8, CPU — or float16, T4 GPU, whisper-large-v3) |
 | VAD | Python, Silero VAD via `torch.hub` |
 | Diarization | Python, `pyannote-audio` 3.x |
-| Summarization | Python, `llama-cpp-python`, Qwen 2.5 3B GGUF |
+| Summarization | Python, `llama-cpp-python` + Qwen 2.5 3B GGUF (CPU) — or vLLM + Qwen 2.5 7B (T4 GPU) |
 | Client SDK | Python 3.13, `httpx`, `pydantic` |
 | Packaging | Helm 3 |
 | Observability | Prometheus, Grafana (`kube-prometheus-stack`) |
@@ -267,9 +271,9 @@ Full documentation is available at **[abhishekkarki.github.io/voxplatform](https
 | 1 | Streaming + VAD sidecar | Complete |
 | 2 | `VoiceModel` operator (CRD → Deployment) | Complete |
 | 3 | `InferencePipeline` CRD · diarizer · summarizer · event log | Complete |
-| 4 | `EvalRun` CRD + Argo Workflows + WER regression in CI | Next |
-| 5 | GPU node pool (T4 spot) · vLLM · whisper-large-v3 | Planned |
-| 6 | Argo Rollouts canary · cost tracking · ArgoCD · demo | Planned |
+| 4 | `EvalRun` CRD + Argo Workflows + WER regression in CI | Complete |
+| 5 | GPU node pool (T4 spot) · vLLM · whisper-large-v3 | Complete |
+| 6 | Argo Rollouts canary · cost tracking · ArgoCD · demo | Next |
 
 ## License
 

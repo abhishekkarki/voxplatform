@@ -1,0 +1,15 @@
+apiVersion: vox.vox.io/v1alpha1
+kind: VoiceModel
+metadata:
+  name: whisper-large-v3-gpu
+  namespace: vox
+spec:
+  model: Systran/faster-whisper-large-v3
+  device: gpu
+  quantization: float16
+  replicas: 1
+  # No spec.image / spec.resources overrides — the operator already picks
+  # the CUDA image (defaultGPUImage) and requests nvidia.com/gpu (see
+  # defaultResources in voicemodel_controller.go) whenever device: gpu.
+  # Requires the GPU node pool (gpu_enabled = true in Terraform) — see
+  # docs/how-to/scale-cluster.md and ADR-010.

@@ -13,6 +13,8 @@ Format: [Michael Nygard's classic template](https://github.com/joelparkerhenders
 | 003 | [Why GCP / GKE](../adr/003-why-gcp-gke.md) | Accepted |
 | 007 | [Append-only event log for inference requests](../adr/007-event-sourcing.md) | Accepted |
 | 008 | [Pipeline composition — InferencePipeline CRD + gateway orchestration](../adr/008-pipeline-composition.md) | Accepted |
+| 009 | [Eval orchestration — EvalRun CRD + Argo Workflows](../adr/009-eval-orchestration.md) | Accepted |
+| 010 | [GPU support — node pool, vLLM, whisper-large-v3](../adr/010-gpu-support.md) | Accepted |
 
 ## Read the ADRs
 

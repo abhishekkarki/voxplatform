@@ -3,6 +3,8 @@
 # It should be run by config/default
 resources:
 - bases/vox.vox.io_voicemodels.yaml
+- bases/vox.vox.io_inferencepipelines.yaml
+- bases/vox.vox.io_evalruns.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

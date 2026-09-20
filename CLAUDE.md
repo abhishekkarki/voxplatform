@@ -48,10 +48,10 @@ The project follows a 14-week / 7-iteration plan. Based on the codebase:
 | 0 | GKE + Terraform + gateway + Grafana | ✅ Complete |
 | 1 | Streaming (WebSocket) + VAD sidecar | ✅ Complete |
 | 2 | Kubernetes Operator (`VoiceModel` CRD) | ✅ Complete |
-| **3** | **`InferencePipeline` CRD, pyannote diarization, llama.cpp/Qwen, event log on GCS** | **✅ Complete** |
-| **4** | **`EvalRun` CRD + Argo Workflows, WER regression in CI** | **⬅ Next** |
-| 5 | GPU node pool (T4 spot), vLLM, whisper-large-v3 | Planned |
-| 6 | Argo Rollouts canary, cost tracking, ArgoCD, demo | Planned |
+| 3 | `InferencePipeline` CRD, pyannote diarization, llama.cpp/Qwen, event log on GCS | ✅ Complete |
+| 4 | `EvalRun` CRD + Argo Workflows, WER regression in CI | ✅ Complete |
+| **5** | **GPU node pool (T4 spot), vLLM, whisper-large-v3** | **✅ Complete** |
+| **6** | **Argo Rollouts canary, cost tracking, ArgoCD, demo** | **⬅ Next** |
 
 ---
 
@@ -159,16 +159,19 @@ operator/
   api/v1alpha1/
     voicemodel_types.go          → VoiceModel CRD schema
     inferencepipeline_types.go   → InferencePipeline CRD schema (iteration 3)
+    evalrun_types.go             → EvalRun CRD schema (iteration 4)
     zz_generated.deepcopy.go     → generated DeepCopy methods (DO NOT edit manually — run make generate)
   internal/controller/
     voicemodel_controller.go     → VoiceModel → Deployment + Service
     inferencepipeline_controller.go → validates VoiceModel readiness, aggregates pipeline phase
+    evalrun_controller.go        → EvalRun → Argo Workflow (unstructured client, no Argo SDK dep)
   config/crd/bases/              → generated CRD YAML (run make manifests after editing types)
 
 services/
   vad/vad_server.py              → Silero VAD FastAPI, POST /vad
   diarizer/diarizer_server.py    → pyannote-audio FastAPI, POST /diarize
-  summarizer/summarizer_server.py → llama-cpp-python FastAPI, POST /summarize
+  summarizer/summarizer_server.py → POST /summarize; ENGINE=llama_cpp (CPU, default) or vllm (GPU, iteration 5)
+  summarizer/Dockerfile.gpu      → CUDA + vLLM image (iteration 5, unverified against real GPU hardware)
 
 clients/python/voxplatform/
   client.py      → VoxClient (sync + async via httpx)
@@ -183,11 +186,12 @@ deploy/helm/
   gateway/          → gateway + VAD sidecar as one pod
   faster-whisper/   → faster-whisper-server deployment
   diarizer/         → pyannote diarizer deployment + PVC
-  summarizer/       → Qwen summarizer deployment + PVC
+  summarizer/       → Qwen summarizer deployment + PVC; values-gpu.yaml overlay for vLLM (iteration 5)
+  gpu-metrics/      → DCGM exporter DaemonSet + ServiceMonitor (iteration 5)
   monitoring/       → kube-prometheus-stack values
 
 infra/
-  modules/{gke,network,registry,storage}/   → Terraform modules
+  modules/{gke,network,registry,storage}/   → Terraform modules; gke/main.tf has the GPU node pool (gpu_enabled, off by default)
   environments/dev/                          → dev tfvars (europe-west3, e2-standard-4)
 ```
 
@@ -275,6 +279,7 @@ kind delete cluster --name vox-local
 - **GKE workflow:** `terraform apply` to bring up cluster, test iteration end-to-end, `terraform destroy` when done. A 2-hour session costs ~$0.40.
 - **Images:** `europe-west3-docker.pkg.dev/voxplatform/vox-images-dev/`
 - **Namespace:** `vox` for all workloads, `monitoring` for Prometheus/Grafana
+- **GPU pool:** off by default (`gpu_enabled = false`). T4 only in `europe-west3-b`, not `-a` where the cluster/CPU pool live — `node_locations` handles this, see `infra/modules/gke/main.tf` and ADR-010.
 
 ---
 
@@ -284,9 +289,12 @@ Do not suggest alternatives to these unless the iteration plan explicitly unlock
 
 | What | Choice | Unlocks |
 |------|--------|---------|
-| STT model | faster-whisper (small.en, CPU, int8) | Iteration 5 (GPU + whisper-large-v3) |
-| LLM | llama.cpp + Qwen 3B Q4 (CPU) | Iteration 5 |
+| STT model | faster-whisper — small.en/int8 (CPU, default) or large-v3/float16 (T4 GPU, `device: gpu`) | Locked (both variants, since Iteration 5) |
+| LLM | llama.cpp + Qwen 3B Q4 (CPU, default) or vLLM + Qwen 7B (T4 GPU, `ENGINE=vllm`) | Locked (both variants, since Iteration 5) |
 | Diarization | pyannote-audio | Locked |
 | VAD | Silero VAD | Locked |
 | GitOps | ArgoCD | Iteration 6 |
 | Event log | JSONL on GCS | Iteration 3 |
+| Eval orchestration | Argo Workflows (unstructured client, no Argo SDK dep) | Iteration 4 |
+| GPU driver install | GKE-managed (`gpu_driver_installation_config`), not the NVIDIA GPU Operator | Iteration 5 |
+| GPU scheduling | `nvidia.com/gpu` resource request only — no nodeSelector/toleration fields (GKE's ExtendedResourceToleration handles the taint) | Iteration 5 |

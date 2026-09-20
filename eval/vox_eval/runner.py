@@ -293,3 +293,21 @@ class EvalReport:
 
         print(f"\nReport saved: {output_path}")
         return output_path
+
+    def save_as(self, path: str | Path) -> Path:
+        """Save report as JSON to an exact path (no timestamp).
+
+        Unlike save(), which timestamps a filename into a directory, this
+        writes to precisely the given path. Used to hand a predictable path
+        to callers that need to read the report back programmatically — e.g.
+        an Argo Workflow step declaring it as an output parameter, which the
+        EvalRun controller then reads off the Workflow status.
+        """
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(path, "w") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+        print(f"\nReport saved: {path}")
+        return path
